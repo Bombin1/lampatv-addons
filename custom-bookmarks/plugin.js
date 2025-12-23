@@ -29,29 +29,25 @@
                 load();
 
                 if (!items.length) {
-                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.5em;">Створіть категорію в картці фільму</div>');
+                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.5em;">Закладки порожні</div>');
                 } else {
-                    items.forEach(function (cat) {
-                        if (cat.list && cat.list.length) {
-                            var row = $('<div class="category-list"><div class="category-title" style="padding:20px 40px;font-size:1.8em;color:#fff;font-weight:bold;">' + cat.name + '</div><div class="category-items" style="display:flex;flex-wrap:wrap;padding:0 40px;"></div></div>');
-                            cat.list.forEach(function (movie) {
-                                var card = Lampa.Template.get('card', movie);
-                                card.addClass('selector');
-                                card.on('click', function () {
-                                    Lampa.Activity.push({
-                                        url: movie.url,
-                                        title: movie.title || movie.name,
-                                        component: 'full',
-                                        id: movie.id,
-                                        method: movie.name ? 'tv' : 'movie',
-                                        card: movie
-                                    });
-                                });
-                                row.find('.category-items').append(card);
+                    var row = $('<div class="category-list"><div class="category-title" style="padding:20px 40px;font-size:1.8em;color:#fff;font-weight:bold;">Мої закладки</div><div class="category-items" style="display:flex;flex-wrap:wrap;padding:0 40px;"></div></div>');
+                    items.forEach(function (movie) {
+                        var card = Lampa.Template.get('card', movie);
+                        card.addClass('selector');
+                        card.on('click', function () {
+                            Lampa.Activity.push({
+                                url: movie.url,
+                                title: movie.title || movie.name,
+                                component: 'full',
+                                id: movie.id,
+                                method: movie.name ? 'tv' : 'movie',
+                                card: movie
                             });
-                            gui.append(row);
-                        }
+                        });
+                        row.find('.category-items').append(card);
                     });
+                    gui.append(row);
                 }
                 return scroll.render().append(gui);
             };
@@ -77,47 +73,24 @@
             };
         });
 
-        // Кнопка в картці фільму
+        // Кнопка у картці фільма
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite' && e.data) {
                 var render = e.object.render();
                 var container = render.find('.full-start__buttons');
 
                 if (container.length && !render.find('.button--custom-bookmarks').length) {
-                    var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в категорію</span></div>');
+                    var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в закладки</span></div>');
 
                     btn.on('click', function () {
-                        var menu = [{ title: ' + Створити категорію', action: 'create' }];
-                        items.forEach(function (cat, i) {
-                            menu.push({ title: cat.name, action: 'add', index: i });
-                        });
-
-                        Lampa.Select.show({
-                            title: 'Оберіть категорію',
-                            items: menu,
-                            onSelect: function (a) {
-                                if (a.action === 'create') {
-                                    Lampa.Input.edit({ value: '', title: 'Назва категорії' }, function (name) {
-                                        if (name) {
-                                            items.push({ name: name, list: [e.data] });
-                                            save();
-                                            Lampa.Noty.show('✅ Категорію створено');
-                                        }
-                                    });
-                                } else {
-                                    var category = items[a.index];
-                                    if (!category.list) category.list = [];
-
-                                    if (!category.list.find(function (m) { return m.id == e.data.id; })) {
-                                        category.list.push(e.data);
-                                        save();
-                                        Lampa.Noty.show('✅ Додано в ' + category.name);
-                                    } else {
-                                        Lampa.Noty.show('⚠️ Вже додано раніше');
-                                    }
-                                }
-                            }
-                        });
+                        load();
+                        if (!items.find(function (m) { return m.id == e.data.id; })) {
+                            items.push(e.data);
+                            save();
+                            Lampa.Noty.show('✅ Додано в закладки');
+                        } else {
+                            Lampa.Noty.show('⚠️ Вже є у закладках');
+                        }
                     });
 
                     container.append(btn);
