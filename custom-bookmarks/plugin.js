@@ -4,9 +4,11 @@
     function CustomBookmarks() {
         var items = [];
         
+        // Функція завантаження даних
         var load = function() {
             try {
-                items = JSON.parse(Lampa.Storage.get('custom_bookmarks_data', '[]'));
+                var data = Lampa.Storage.get('custom_bookmarks_data', '[]');
+                items = JSON.parse(data || '[]');
             } catch(e) { 
                 items = []; 
             }
@@ -18,17 +20,16 @@
 
         load();
 
-        // 1. Компонент перегляду закладок
+        // 1. Реєстрація компонента (виправляє помилку зі скріншотів)
         Lampa.Component.add('custom_bookmarks', function (object) {
-            var comp = this;
             var scroll = new Lampa.Scroll({mask: true, over: true});
             
-            this.start = function () {
+            this.create = function () {
                 var gui = $('<div class="category-full"></div>');
                 load();
 
                 if (items.length === 0) {
-                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.5em;">Тут порожньо. Додайте фільм через кнопку в картці.</div>');
+                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.5em;">Створіть категорію в картці фільму</div>');
                 } else {
                     items.forEach(function(cat) {
                         if (cat.list && cat.list.length > 0) {
@@ -47,22 +48,20 @@
                         }
                     });
                 }
-                
-                this.activity.loader(false);
-                this.activity.render(scroll.render().append(gui));
+                return scroll.render().append(gui);
             };
 
-            this.pause = function () {};
-            this.stop = function () {};
+            this.render = function () {
+                return this.create();
+            };
         });
 
-        // 2. Безпечне додавання кнопки в картку
+        // 2. Додавання кнопки (використовуємо іншу подію для надійності)
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
-                var render = e.object.render();
-                var container = render.find('.full-start__buttons');
+                var container = e.object.render().find('.full-start__buttons');
                 
-                if (container.length && !render.find('.button--custom-bookmarks').length) {
+                if (container.length && !e.object.render().find('.button--custom-bookmarks').length) {
                     var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в категорію</span></div>');
                     
                     btn.on('click', function () {
@@ -86,11 +85,9 @@
                                 } else {
                                     var category = items[a.index];
                                     if (!category.list) category.list = [];
-                                    if (!category.list.find(function(m){ return m.id == e.data.id })) {
-                                        category.list.push(e.data);
-                                        save();
-                                        Lampa.Noty.show('Додано в ' + category.name);
-                                    }
+                                    category.list.push(e.data);
+                                    save();
+                                    Lampa.Noty.show('Додано в ' + category.name);
                                 }
                             }
                         });
@@ -101,7 +98,7 @@
             }
         });
 
-        // 3. Додавання в бічне меню
+        // 3. Додавання пункту в меню
         var addMenuItem = function() {
             if ($('.menu .menu__list').length && !$('.menu__item--custom-bookmarks').length) {
                 var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="white" stroke-width="2"><path d="M19 21L12 16L5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21Z"/></svg></div><div class="menu__text">Власні закладки</div></li>');
@@ -115,7 +112,6 @@
         setInterval(addMenuItem, 2000);
     }
 
-    // Запуск
     if (window.appready) CustomBookmarks();
     else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') CustomBookmarks(); });
 })();
