@@ -14,20 +14,20 @@
             try {
                 Lampa.Storage.set('custom_bookmarks_folders', JSON.stringify(folders));
             } catch(e) {
-                Lampa.Noty.show('Помилка збереження: ' + e.message);
+                console.log('Помилка збереження:', e.message);
             }
         };
 
         load();
 
-        // 1. СТИЛІ ДЛЯ ТАЙЛІВ (ПЛИТОК)
+        // 1. СТИЛІ ДЛЯ ТАЙЛІВ (ЗМЕНШЕНО РОЗМІР)
         if (!$('#custom-folders-styles').length) {
             $('body').append('<style id="custom-folders-styles"> \
-                .bookmarks-folders-wrapper { display: flex; flex-wrap: wrap; padding: 20px 20px 10px; gap: 15px; width: 100%; } \
+                .bookmarks-folders-wrapper { display: flex; flex-wrap: wrap; padding: 15px 20px 5px; gap: 12px; width: 100%; } \
                 .bookmarks-folder-tile { \
                     background: rgba(255, 255, 255, 0.07); \
-                    width: 180px; height: 100px; \
-                    border-radius: 12px; \
+                    width: 150px; height: 85px; \
+                    border-radius: 10px; \
                     display: flex; \
                     flex-direction: column; \
                     align-items: center; \
@@ -36,7 +36,6 @@
                     border: 2px solid transparent; \
                     transition: all 0.2s ease; \
                     position: relative; \
-                    overflow: hidden; \
                 } \
                 .bookmarks-folder-tile.focus { \
                     background: #fff !important; \
@@ -45,24 +44,26 @@
                     border-color: #fff; \
                 } \
                 .bookmarks-folder-tile__title { \
-                    font-size: 1.1em; \
+                    font-size: 1em; \
                     font-weight: 500; \
                     text-align: center; \
-                    padding: 0 10px; \
-                    z-index: 2; \
+                    padding: 0 8px; \
+                    white-space: nowrap; \
+                    overflow: hidden; \
+                    text-overflow: ellipsis; \
+                    width: 100%; \
                 } \
                 .bookmarks-folder-tile__count { \
-                    font-size: 1.3em; \
+                    font-size: 1.1em; \
                     opacity: 0.5; \
-                    margin-top: 5px; \
-                    z-index: 2; \
+                    margin-top: 3px; \
                 } \
                 .bookmarks-folder-tile--create { \
-                    border: 2px dashed rgba(255, 255, 255, 0.2); \
+                    border: 2px dashed rgba(255, 255, 255, 0.15); \
                     background: transparent; \
                 } \
                 .bookmarks-folder-tile--create .bookmarks-folder-tile__count { \
-                    opacity: 1; font-size: 1.8em; \
+                    opacity: 0.8; font-size: 1.6em; \
                 } \
             </style>');
         }
@@ -78,9 +79,10 @@
                 tile.on('click', function() {
                     Lampa.Input.edit({value: '', title: 'Назва папки'}, function(name) {
                         if (name) {
-                            folders.push({name: name, list: []});
+                            var newFolder = {name: name, list: []};
+                            folders.push(newFolder);
                             save();
-                            Lampa.Activity.replace(); // Повне оновлення для правильної побудови сітки
+                            Lampa.Activity.replace(); // Оновлюємо, щоб з'явився новий тайл
                         }
                     });
                 });
@@ -144,7 +146,7 @@
             }
         });
 
-        // 3. МЕНЮ ВИБОРУ В КАРТЦІ (БЕЗ ЗМІН)
+        // 3. МЕНЮ ВИБОРУ В КАРТЦІ
         var originalSelect = Lampa.Select.show;
         Lampa.Select.show = function(params) {
             if (params.title === Lampa.Lang.translate('title_book')) {
@@ -159,7 +161,11 @@
                     var movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
                     if (item.is_new) {
                         Lampa.Input.edit({value: '', title: 'Назва папки'}, function(name){
-                            if(name) { folders.push({name: name, list: [movie]}); save(); Lampa.Noty.show('Створено'); }
+                            if(name) { 
+                                folders.push({name: name, list: [movie]}); 
+                                save(); 
+                                Lampa.Noty.show('Папку створено'); 
+                            }
                         });
                     } else if (item.is_custom) {
                         var folder = folders[item.f_idx];
@@ -174,5 +180,6 @@
         };
     }
 
+    // Запуск без зайвих повідомлень
     CustomFoldersExtension();
 })();
