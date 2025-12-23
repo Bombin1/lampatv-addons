@@ -4,7 +4,6 @@
     function CustomBookmarks() {
         var items = [];
         
-        // Функція завантаження даних
         var load = function() {
             try {
                 var data = Lampa.Storage.get('custom_bookmarks_data', '[]');
@@ -20,10 +19,12 @@
 
         load();
 
-        // 1. Реєстрація компонента (виправляє помилку зі скріншотів)
+        // Реєстрація компонента з усіма необхідними методами
         Lampa.Component.add('custom_bookmarks', function (object) {
+            var comp = this;
             var scroll = new Lampa.Scroll({mask: true, over: true});
             
+            // Метод для створення візуальної частини
             this.create = function () {
                 var gui = $('<div class="category-full"></div>');
                 load();
@@ -33,13 +34,18 @@
                 } else {
                     items.forEach(function(cat) {
                         if (cat.list && cat.list.length > 0) {
-                            var row = $('<div class="category-list"><div class="category-title" style="padding: 20px 40px; font-size: 1.8em; color: #fff;">' + cat.name + '</div><div class="category-items" style="display: flex; flex-wrap: wrap; padding: 0 40px;"></div></div>');
+                            var row = $('<div class="category-list"><div class="category-title" style="padding: 20px 40px; font-size: 1.8em; color: #fff; font-weight: bold;">' + cat.name + '</div><div class="category-items" style="display: flex; flex-wrap: wrap; padding: 0 40px;"></div></div>');
                             cat.list.forEach(function(movie) {
                                 var card = Lampa.Template.get('card', movie);
                                 card.addClass('selector');
                                 card.on('click', function() {
                                     Lampa.Activity.push({
-                                        url: movie.url, title: movie.title || movie.name, component: 'full', id: movie.id, method: movie.name ? 'tv' : 'movie', card: movie
+                                        url: movie.url, 
+                                        title: movie.title || movie.name, 
+                                        component: 'full', 
+                                        id: movie.id, 
+                                        method: movie.name ? 'tv' : 'movie', 
+                                        card: movie
                                     });
                                 });
                                 row.find('.category-items').append(card);
@@ -51,17 +57,35 @@
                 return scroll.render().append(gui);
             };
 
+            // Метод ініціалізації (виправляє помилку зі скріншотів)
+            this.start = function () {
+                Lampa.Controller.add('content', {
+                    toggle: function () {
+                        Lampa.Controller.collectionSet(comp.render());
+                        Lampa.Controller.collectionFocus(false, comp.render());
+                    }
+                });
+                Lampa.Controller.toggle('content');
+            };
+
             this.render = function () {
                 return this.create();
             };
+
+            this.pause = function () {};
+            this.stop = function () {};
+            this.destroy = function () {
+                scroll.destroy();
+            };
         });
 
-        // 2. Додавання кнопки (використовуємо іншу подію для надійності)
+        // Додавання кнопки в картку фільму
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
-                var container = e.object.render().find('.full-start__buttons');
+                var render = e.object.render();
+                var container = render.find('.full-start__buttons');
                 
-                if (container.length && !e.object.render().find('.button--custom-bookmarks').length) {
+                if (container.length && !render.find('.button--custom-bookmarks').length) {
                     var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в категорію</span></div>');
                     
                     btn.on('click', function () {
@@ -79,15 +103,21 @@
                                         if (name) {
                                             items.push({ name: name, list: [e.data] });
                                             save();
-                                            Lampa.Noty.show('Створено: ' + name);
+                                            Lampa.Noty.show('Категорію створено');
                                         }
                                     });
                                 } else {
                                     var category = items[a.index];
                                     if (!category.list) category.list = [];
-                                    category.list.push(e.data);
-                                    save();
-                                    Lampa.Noty.show('Додано в ' + category.name);
+                                    
+                                    // Перевірка, чи фільм вже є в цій категорії
+                                    if (!category.list.find(function(m){ return m.id == e.data.id })) {
+                                        category.list.push(e.data);
+                                        save();
+                                        Lampa.Noty.show('Додано в ' + category.name);
+                                    } else {
+                                        Lampa.Noty.show('Вже додано раніше');
+                                    }
                                 }
                             }
                         });
@@ -98,7 +128,7 @@
             }
         });
 
-        // 3. Додавання пункту в меню
+        // Додавання пункту в меню (зліва)
         var addMenuItem = function() {
             if ($('.menu .menu__list').length && !$('.menu__item--custom-bookmarks').length) {
                 var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="white" stroke-width="2"><path d="M19 21L12 16L5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21Z"/></svg></div><div class="menu__text">Власні закладки</div></li>');
