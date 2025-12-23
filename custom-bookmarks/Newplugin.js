@@ -5,7 +5,6 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // 1. Функції роботи з даними
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -17,7 +16,6 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // 2. Стилі (мінімалістичні та стабільні)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; } \
@@ -29,14 +27,12 @@
         </style>');
     }
 
-    // 3. Відображення в розділі "Вибране" (Бокова панель)
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
-
                 comp.render = function () {
                     var html = originalRender.call(comp);
                     var folders = getFolders();
@@ -44,8 +40,6 @@
                     
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
-                        
-                        // Кнопка створення
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
@@ -59,17 +53,23 @@
                         });
                         wrapper.append(createBtn);
 
-                        // Список папок
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // ✅ ТВОЯ ВИПРАВЛЕНА ЛОГІКА: використовуємо items
+                                // ПРИМУСОВА ПІДГОТОВКА КАРТОК ПЕРЕД ВІДКРИТТЯМ
+                                var preparedItems = (folder.list || []).map(function(item) {
+                                    // Очищаємо від старих методів і гарантуємо структуру Lampa
+                                    var card = Object.assign({}, item);
+                                    card.component = 'full'; // Вказуємо компонент для кліку по картці
+                                    return card;
+                                });
+
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
                                     type: 'folder',
-                                    items: folder.list || [],
+                                    items: preparedItems,
                                     page: 1
                                 });
                             });
@@ -97,10 +97,8 @@
         }
     });
 
-    // 4. Додавання в папки з картки фільму (Перехоплення Select)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
-        // Перевірка, чи це меню закладок (за ID або назвою)
         var isFav = params.items && params.items.some(function(i) { 
             return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
         });
@@ -112,8 +110,7 @@
             var movie = active.card || active.data;
 
             if (folders.length > 0 && movie) {
-                // Додаємо пункти папок
-                params.items.push({ title: '--- ПАПКИ ---', separator: true });
+                params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
                 folders.forEach(function(f, i) {
                     params.items.push({ title: '📁 ' + f.name, is_custom: true, f_idx: i });
                 });
@@ -124,11 +121,11 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // ✅ Зберігаємо ПОВНУ картку фільму
-                        var movieToSave = Object.assign({}, movie);
+                        // Копіюємо дані картки "як є"
+                        var movieData = JSON.parse(JSON.stringify(movie));
                         
-                        if (!target.list.some(function(m) { return m.id == movieToSave.id; })) {
-                            target.list.push(movieToSave);
+                        if (!target.list.some(function(m) { return m.id == movieData.id; })) {
+                            target.list.push(movieData);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
@@ -142,5 +139,4 @@
         }
         originalSelectShow.call(Lampa.Select, params);
     };
-
 })();
