@@ -3,17 +3,14 @@ function () {
 
     var STORAGE_KEY = 'custom_bookmarks';
 
-    // Отримати список закладок
     function getBookmarks() {
         return Lampa.Storage.get(STORAGE_KEY, []);
     }
 
-    // Зберегти список закладок
     function saveBookmarks(list) {
         Lampa.Storage.set(STORAGE_KEY, list);
     }
 
-    // Додати нову закладку
     function addBookmark(item) {
         var list = getBookmarks();
         list.push({ title: item.title, url: item.url });
@@ -21,17 +18,14 @@ function () {
         Lampa.Toast.show('✅ Додано в закладки');
     }
 
-    // Видалити закладку
     function removeBookmark(index) {
         var list = getBookmarks();
         list.splice(index, 1);
         saveBookmarks(list);
     }
 
-    // Побудувати екран закладок
     function showBookmarks() {
         var list = getBookmarks();
-
         Lampa.Activity.push({
             url: 'custom_bookmarks',
             title: 'Закладки',
@@ -46,7 +40,7 @@ function () {
                             subtitle: item.title,
                             onYes: function(){
                                 removeBookmark(i);
-                                showBookmarks(); // оновити екран
+                                showBookmarks();
                             }
                         });
                     }
@@ -63,22 +57,26 @@ function () {
         showBookmarks();
     });
 
-    // Додаємо кнопку ⭐ у картку
-    Lampa.Template.add('card', function(card, data){
-        var btn = $('<div class="card__bookmark">⭐</div>');
-        btn.css({
-            position: 'absolute',
-            top: '5px',
-            right: '5px',
-            cursor: 'pointer',
-            'font-size': '20px'
+    // Додаємо кнопку у картку тільки якщо API існує
+    if (Lampa.Template && typeof Lampa.Template.add === 'function') {
+        Lampa.Template.add('card', function(card, data){
+            var btn = $('<div class="card__bookmark">⭐</div>');
+            btn.css({
+                position: 'absolute',
+                top: '5px',
+                right: '5px',
+                cursor: 'pointer',
+                'font-size': '20px'
+            });
+            btn.on('click', function(e){
+                e.stopPropagation();
+                addBookmark(data);
+            });
+            card.find('.card__view').append(btn);
         });
-        btn.on('click', function(e){
-            e.stopPropagation();
-            addBookmark(data);
-        });
-        card.find('.card__view').append(btn);
-    });
+    } else {
+        console.log('ℹ️ Template.add недоступний у цій версії Lampa');
+    }
 
     console.log('✅ Custom Bookmarks plugin initialized');
 }
