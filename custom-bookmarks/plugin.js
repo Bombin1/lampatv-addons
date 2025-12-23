@@ -8,6 +8,7 @@
             try {
                 items = Lampa.Storage.get('custom_bookmarks_data', []);
                 if (typeof items === 'string') items = JSON.parse(items);
+                if (!Array.isArray(items)) items = [];
             } catch (e) {
                 items = [];
             }
@@ -19,7 +20,7 @@
 
         load();
 
-        // Реєстрація компонента
+        // Компонент перегляду закладок
         Lampa.Component.add('custom_bookmarks', function () {
             var comp = this;
             var scroll = new Lampa.Scroll({ mask: true, over: true });
@@ -73,29 +74,64 @@
             };
         });
 
-        // Кнопка у картці фільма (виправлено .render → .object)
+        // Додавання кнопки у картку фільму/серіалу — без .render(), з фолбеками
         Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite' && e.data && e.object) {
-                var render = e.object; // БЕЗ .render()
-                var container = render.find('.full-start__buttons');
+            if (e.type !== 'complite' || !e) return;
 
-                if (container.length && !render.find('.button--custom-bookmarks').length) {
-                    var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в закладки</span></div>');
+            // root: або e.object.render(), або e.object (як jQuery), або видимий шар
+            var root = null;
 
-                    btn.on('click', function () {
-                        load();
-                        if (!items.find(function (m) { return m.id == e.data.id; })) {
-                            items.push(e.data);
-                            save();
-                            Lampa.Noty.show('✅ Додано в закладки');
-                        } else {
-                            Lampa.Noty.show('⚠️ Вже є у закладках');
-                        }
-                    });
-
-                    container.append(btn);
-                }
+            if (e.object && typeof e.object.render === 'function') {
+                // У деяких збірках є render()
+                try { root = e.object.render(); } catch (_) { root = null; }
             }
+            if (!root && e.object && e.object.jquery) {
+                // Якщо це jQuery-елемент
+                root = e.object;
+            }
+            if (!root) {
+                // Останній фолбек — шукаємо активний шар full-екрана
+                root = $('.layer--modal:visible, .layer--show:visible').last();
+                if (!root.length) root = $('.full'); // ще один фолбек
+            }
+
+            var container = root.find('.full-start__buttons');
+            if (!container.length) return;
+
+            // Уникнути дубля
+            if (root.find('.button--custom-bookmarks').length) return;
+
+            var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в закладки</span></div>');
+
+            btn.on('click', function () {
+                // e.data може бути відсутнім у деяких потоках — візьмемо дані з активності, якщо потрібно
+                var data = e.data || Lampa.Activity && Lampa.Activity.active() && Lampa.Activity.active().card || null;
+                if (!data || !data.id) {
+                    Lampa.Noty.show('Не вдалось отримати дані картки');
+                    return;
+                }
+
+                load();
+                var exists = items.find(function (m) { return String(m.id) === String(data.id); });
+                if (!exists) {
+                    // Зберігаємо мінімально потрібні поля, щоб картка коректно рендерилась
+                    items.push({
+                        id: data.id,
+                        title: data.title || data.name || '',
+                        name: data.name || '',
+                        url: data.url || '',
+                        poster: data.poster || data.poster_path || '',
+                        release_date: data.release_date || data.first_air_date || '',
+                        vote_average: data.vote_average || 0
+                    });
+                    save();
+                    Lampa.Noty.show('✅ Додано в закладки');
+                } else {
+                    Lampa.Noty.show('⚠️ Вже є у закладках');
+                }
+            });
+
+            container.append(btn);
         });
 
         // Пункт у меню зліва
