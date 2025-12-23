@@ -16,6 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
+    // Стилі (залишаємо стабільними)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; } \
@@ -27,6 +28,7 @@
         </style>');
     }
 
+    // 1. РОБОТА З БОКОВОЮ ПАНЕЛЛЮ (ВІДКРИТТЯ)
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -55,25 +57,16 @@
 
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
-                            
                             tile.on('click', function() {
-                                // ПРИМУСОВА ПІДГОТОВКА КАРТОК ПЕРЕД ВІДКРИТТЯМ
-                                var preparedItems = (folder.list || []).map(function(item) {
-                                    // Очищаємо від старих методів і гарантуємо структуру Lampa
-                                    var card = Object.assign({}, item);
-                                    card.component = 'full'; // Вказуємо компонент для кліку по картці
-                                    return card;
-                                });
-
+                                // ✅ Відкриваємо через items з підготовленими картками
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
                                     type: 'folder',
-                                    items: preparedItems,
+                                    items: folder.list || [],
                                     page: 1
                                 });
                             });
-
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
@@ -97,6 +90,7 @@
         }
     });
 
+    // 2. ДОДАВАННЯ З КАРТКИ (НОРМАЛІЗАЦІЯ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params.items && params.items.some(function(i) { 
@@ -121,11 +115,19 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // Копіюємо дані картки "як є"
-                        var movieData = JSON.parse(JSON.stringify(movie));
-                        
-                        if (!target.list.some(function(m) { return m.id == movieData.id; })) {
-                            target.list.push(movieData);
+                        // ✅ НОРМАЛІЗАЦІЯ КАРТКИ ПЕРЕД ЗБЕРЕЖЕННЯМ
+                        var cleanCard = {
+                            id: movie.id,
+                            title: movie.title || movie.name,
+                            original_title: movie.original_title || movie.original_name,
+                            release_date: movie.release_date || movie.first_air_date,
+                            poster: movie.poster_path || movie.poster,
+                            img: movie.img || movie.poster_path || movie.poster, // Lampa часто шукає img
+                            type: movie.type || (movie.name ? 'tv' : 'movie')
+                        };
+
+                        if (!target.list.some(function(m) { return m.id == cleanCard.id; })) {
+                            target.list.push(cleanCard);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
