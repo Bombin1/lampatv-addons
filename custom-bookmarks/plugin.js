@@ -73,10 +73,10 @@
             };
         });
 
-        // Кнопка у картці фільма
+        // Кнопка у картці фільма (виправлено .render → .object)
         Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite' && e.data) {
-                var render = e.object.render();
+            if (e.type === 'complite' && e.data && e.object) {
+                var render = e.object; // БЕЗ .render()
                 var container = render.find('.full-start__buttons');
 
                 if (container.length && !render.find('.button--custom-bookmarks').length) {
