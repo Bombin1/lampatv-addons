@@ -64,13 +64,15 @@
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // ВИПРАВЛЕНО: додано method: 'card' та обгортку для карток
+                                // ВИПРАВЛЕНО: Надійний спосіб відкриття папки через компонент full
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
-                                    method: 'card',
-                                    card: folder.list || [],
-                                    page: 1
+                                    cards: folder.list || [],
+                                    page: 1,
+                                    onBack: function(){
+                                        Lampa.Activity.backward();
+                                    }
                                 });
                             });
 
@@ -103,26 +105,15 @@
             return i.id === 'wath' || i.id === 'book' || i.id === 'like' || i.id === 'history'; 
         });
 
-        var isBookTitle = params.title && (
-            params.title.toLowerCase().indexOf('вибране') !== -1 || 
-            params.title.toLowerCase().indexOf('закладки') !== -1 ||
-            params.title.toLowerCase().indexOf('избранное') !== -1
-        );
-
-        if (hasBookmarkIds || isBookTitle) {
+        if (hasBookmarkIds || (params.title && params.title.indexOf('Вибране') !== -1)) {
             var folders = getFolders();
             var active = Lampa.Activity.active();
             var movie = active ? (active.card || active.data) : null;
 
             if (folders.length > 0 && movie) {
                 params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
-
                 folders.forEach(function(f, i) {
-                    params.items.push({
-                        title: '📁 ' + f.name,
-                        is_custom_folder: true,
-                        f_idx: i
-                    });
+                    params.items.push({ title: '📁 ' + f.name, is_custom_folder: true, f_idx: i });
                 });
 
                 var originalOnSelect = params.onSelect;
@@ -132,11 +123,11 @@
                         var target = fUpdate[item.f_idx];
                         if (!target.list) target.list = [];
                         
-                        // ВИПРАВЛЕНО: Чисте копіювання об'єкта фільму
-                        var movieData = JSON.parse(JSON.stringify(movie));
+                        // Зберігаємо лише чисті дані фільму без зайвих функцій
+                        var movieToSave = JSON.parse(JSON.stringify(movie));
                         
-                        if (!target.list.some(function(m) { return m.id == movieData.id; })) {
-                            target.list.push(movieData);
+                        if (!target.list.some(function(m) { return m.id == movieToSave.id; })) {
+                            target.list.push(movieToSave);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
@@ -150,5 +141,4 @@
         }
         originalSelectShow.call(Lampa.Select, params);
     };
-
 })();
