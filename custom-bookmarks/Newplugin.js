@@ -17,24 +17,24 @@
         } catch (e) { console.log('Помилка збереження'); }
     }
 
-    // Стилі для зменшених тайлів (на 1/3 менші)
+    // Стилі для дуже маленьких тайлів (зменшено на 1/3)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append(`<style id="custom-bookmarks-styles">
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; }
             .folder-tile { 
                 background: rgba(255, 255, 255, 0.08); 
-                width: 100px; height: 60px; 
-                border-radius: 8px; 
+                width: 90px; height: 55px; 
+                border-radius: 6px; 
                 display: flex; flex-direction: column; align-items: center; justify-content: center; 
-                cursor: pointer; border: 2px solid transparent; transition: all 0.2s ease;
+                cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease;
             }
             .folder-tile.focus { 
                 background: #fff !important; color: #000 !important; 
                 transform: scale(1.05); border-color: #fff; 
             }
-            .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
-            .folder-tile__count { font-size: 0.75em; opacity: 0.5; margin-top: 2px; }
-            .folder-tile--create { border: 2px dashed rgba(255, 255, 255, 0.2); background: transparent; }
+            .folder-tile__name { font-size: 0.75em; font-weight: 500; text-align: center; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+            .folder-tile__count { font-size: 0.7em; opacity: 0.5; margin-top: 1px; }
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); background: transparent; }
         </style>`);
     }
 
@@ -119,20 +119,30 @@
             }
         });
 
-        // ІНТЕГРАЦІЯ В МЕНЮ "ВИБРАНЕ" У КАРТЦІ ФІЛЬМУ
+        // МОДИФІКАЦІЯ МЕНЮ "ВИБРАНЕ" (Select)
         const originalSelect = Lampa.Select.show;
         Lampa.Select.show = function (params) {
-            // Перевіряємо, чи це меню вибору закладок (як на вашому фото)
-            if (params.title === Lampa.Lang.translate('title_book') || params.items.some(i => i.id === 'wath')) {
+            // Шукаємо меню "Вибране" за всіма можливими заголовками
+            const isFavoriteMenu = params.title === 'Вибране' || 
+                                 params.title === 'Избранное' || 
+                                 params.title === Lampa.Lang.translate('title_book') ||
+                                 params.items.some(i => i.id === 'wath' || i.id === 'book');
+
+            if (isFavoriteMenu) {
                 const movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
                 folders = loadFolders();
 
-                // Додаємо ваші папки до списку вибору
+                // Додаємо роздільник, якщо є папки
+                if (folders.length > 0) {
+                    params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
+                }
+
                 folders.forEach((f, i) => {
                     params.items.push({
                         title: f.name,
                         is_custom_folder: true,
-                        folder_index: i
+                        folder_index: i,
+                        ghost: true // Дозволяє виділяти пункт без закриття, якщо потрібно
                     });
                 });
 
@@ -149,7 +159,7 @@
                         } else {
                             Lampa.Noty.show('Вже є у цій папці');
                         }
-                    } else {
+                    } else if (!item.separator) {
                         origOnSelect(item);
                     }
                 };
