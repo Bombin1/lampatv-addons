@@ -60,10 +60,12 @@
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
 
                             tile.on('click', function() {
+                                // Використовуємо card + method: 'card'
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
-                                    items: folder.list || [],
+                                    method: 'card',
+                                    card: folder.list || [],
                                     page: 1
                                 });
                             });
