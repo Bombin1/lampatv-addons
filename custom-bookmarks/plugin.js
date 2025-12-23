@@ -135,6 +135,17 @@
         });
 
         // Пункт у меню зліва
+        setTimeout(function(){
+    var root = $('.layer--modal:visible, .layer--show:visible, .full').last();
+    if (!root.length) return;
+
+    var btn = $('<div class="selector" style="position:fixed;top:50px;right:50px;z-index:9999;background:#222;color:#fff;padding:10px;border-radius:5px;">Тестова кнопка</div>');
+    btn.on('click', function(){
+        Lampa.Noty.show('✅ Кнопка працює');
+    });
+
+    root.append(btn);
+}, 3000);
         function addMenuItem() {
             if ($('.menu .menu__list').length && !$('.menu__item--custom-bookmarks').length) {
                 var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="white" stroke-width="2"><path d="M19 21L12 16L5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21Z"/></svg></div><div class="menu__text">Власні закладки</div></li>');
