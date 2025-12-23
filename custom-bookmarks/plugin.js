@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'favorite';
   const DEFAULT_TYPE_NAME = 'Мої закладки';
 
-  // ===== Утиліти з захистом =====
+  // ===== Утиліти =====
   function getFavorite() {
     let fav = Lampa.Storage.get(STORAGE_KEY, {});
     if (typeof fav === 'string') {
@@ -17,10 +17,8 @@
   }
 
   function saveFavorite(obj) {
-    try {
-      Lampa.Storage.set(STORAGE_KEY, obj);
-      if (Lampa.Favorite && typeof Lampa.Favorite.init === 'function') Lampa.Favorite.init();
-    } catch (_) {}
+    Lampa.Storage.set(STORAGE_KEY, obj);
+    if (Lampa.Favorite && typeof Lampa.Favorite.init === 'function') Lampa.Favorite.init();
   }
 
   function ensureDefaultType() {
@@ -36,11 +34,9 @@
 
   function extractCardData(e) {
     const act = Lampa.Activity && Lampa.Activity.active ? Lampa.Activity.active() : null;
-    const data = (act && act.data) || (e && e.data) || (act && act.card) || (act && act.activity && act.activity.data) || {};
+    const data = act?.card || act?.data || e?.data || act?.activity?.card || act?.activity?.data || {};
     const id = data.id ?? data.ids ?? data.tmdb_id;
     if (!id) return null;
-
-    // мінімально потрібні поля
     return {
       id,
       title: data.title || data.name || '',
@@ -48,8 +44,7 @@
       url: data.url || '',
       poster: data.poster || data.poster_path || '',
       release_date: data.release_date || data.first_air_date || '',
-      vote_average: data.vote_average || 0,
-      source: data.source || ''
+      vote_average: data.vote_average || 0
     };
   }
 
@@ -69,9 +64,9 @@
       if (idx >= 0) fav.card[idx] = Object.assign({}, fav.card[idx], card);
       else fav.card.push(card);
       saveFavorite(fav);
-      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('✅ Додано в «' + DEFAULT_TYPE_NAME + '»');
+      Lampa.Noty.show('✅ Додано в «' + DEFAULT_TYPE_NAME + '»');
     } else {
-      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('⚠️ Вже у «' + DEFAULT_TYPE_NAME + '»');
+      Lampa.Noty.show('⚠️ Вже у «' + DEFAULT_TYPE_NAME + '»');
     }
   }
 
@@ -83,25 +78,15 @@
     const i = fav[uid].indexOf(card.id);
     if (i >= 0) {
       fav[uid].splice(i, 1);
-      // прибираємо картку, якщо вона не використовується у жодній іншій кастомній категорії
-      const stillUsed = Object.keys(fav.customTypes)
-        .filter(name => name !== DEFAULT_TYPE_NAME && name !== 'card' && name !== 'any')
-        .some(name => {
-          const otherUid = fav.customTypes[name];
-          const arr = Array.isArray(fav[otherUid]) ? fav[otherUid] : [];
-          return arr.indexOf(card.id) >= 0;
-        });
-      if (!stillUsed) {
-        fav.card = fav.card.filter(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) !== card.id);
-      }
+      fav.card = fav.card.filter(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) !== card.id);
       saveFavorite(fav);
-      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('🗑️ Видалено з «' + DEFAULT_TYPE_NAME + '»');
+      Lampa.Noty.show('🗑️ Видалено з «' + DEFAULT_TYPE_NAME + '»');
     } else {
-      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('ℹ️ Не знайдено у «' + DEFAULT_TYPE_NAME + '»');
+      Lampa.Noty.show('ℹ️ Не знайдено у «' + DEFAULT_TYPE_NAME + '»');
     }
   }
 
-  // ===== Інтеграція у картку: одна кнопка, одне натискання =====
+  // ===== Кнопка у картці =====
   Lampa.Listener.follow('full', function (e) {
     if (!e || e.type !== 'complite') return;
 
@@ -112,26 +97,22 @@
     const bookBtn = render.find('.button--book');
     if (!bookBtn.length) return;
 
-    // Вимкнути попередні обробники, додати наш
     bookBtn.off('hover:enter.custom-bookmarks').on('hover:enter.custom-bookmarks', function () {
-      try {
-        const card = extractCardData(e);
-        if (!card || !card.id) {
-          Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('⚠️ Не вдалося отримати дані картки');
-          return;
-        }
-        const { fav, uid } = ensureDefaultType();
-        const inList = isInBucket(fav, uid, card.id);
-
-        if (inList) removeFromDefault(card);
-        else addToDefault(card);
-      } catch (_) {
-        Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('Помилка обробки закладки');
+      const card = extractCardData(e);
+      if (!card || !card.id) {
+        Lampa.Noty.show('⚠️ Не вдалося отримати дані картки');
+        console.log('Card data debug:', card);
+        return;
       }
+      const { fav, uid } = ensureDefaultType();
+      const inList = isInBucket(fav, uid, card.id);
+
+      if (inList) removeFromDefault(card);
+      else addToDefault(card);
     });
   });
 
-  // ===== Відображення у «Закладках»: чіп + перехід у дефолтну категорію =====
+  // ===== Чіп у «Закладках» =====
   function drawDefaultTypeChip() {
     const act = Lampa.Activity && Lampa.Activity.active ? Lampa.Activity.active() : null;
     if (!act || act.name !== 'bookmarks' || !act.activity || typeof act.activity.render !== 'function') return;
@@ -142,8 +123,7 @@
     const { fav, uid } = ensureDefaultType();
     const counter = (Array.isArray(fav[uid]) ? fav[uid] : []).length;
 
-    const chip = Lampa.Template.js('register')
-      .addClass('custom-type-default');
+    const chip = Lampa.Template.js('register').addClass('custom-type-default');
     chip.find('.register__name').text(DEFAULT_TYPE_NAME);
     chip.find('.register__counter').text(counter);
 
@@ -157,23 +137,19 @@
       });
     });
 
-    // Додати кнопку «створити» не будемо — safe mode тримає одну категорію
     container.find('.register:first').after(chip);
   }
 
-  // Слухати відкриття «Закладок»
   Lampa.Storage.listener && Lampa.Storage.listener.follow && Lampa.Storage.listener.follow('change', function (ev) {
     if (ev.name !== 'activity') return;
     drawDefaultTypeChip();
   });
 
-  // Запуск стилів (мінімально)
+  // Запуск стилів
   function start() {
-    try {
-      $('<style>').prop('type', 'text/css').html(
-        '.custom-type-default .register__name{font-weight:600}'
-      ).appendTo('head');
-    } catch (_) {}
+    $('<style>').prop('type', 'text/css').html(
+      '.custom-type-default .register__name{font-weight:600}'
+    ).appendTo('head');
   }
 
   if (window.appready) start();
