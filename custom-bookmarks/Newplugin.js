@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Стилі для маленьких тайлів
+    // Стилі для тайлів
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; } \
@@ -37,7 +37,7 @@
         </style>');
     }
 
-    // 1. ВІДОБРАЖЕННЯ В ОСНОВНОМУ МЕНЮ ЗАКЛАДОК
+    // 1. ВІДОБРАЖЕННЯ В РОЗДІЛІ ЗАКЛАДОК
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -51,6 +51,7 @@
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div><div class="folder-tile__count">+</div></div>');
+                        
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
@@ -62,11 +63,21 @@
                             });
                         });
                         wrapper.append(createBtn);
+
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
+                            
                             tile.on('click', function() {
-                                Lampa.Activity.push({ title: folder.name, component: 'category_full', card: folder.list || [], page: 1 });
+                                // ВИПРАВЛЕНО: Коректна передача даних для відображення карток
+                                Lampa.Activity.push({
+                                    title: folder.name,
+                                    component: 'category_full',
+                                    method: 'card', // Вказуємо метод відображення
+                                    card: folder.list || [],
+                                    page: 1
+                                });
                             });
+
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
@@ -90,40 +101,23 @@
         }
     });
 
-    // 2. УНІВЕРСАЛЬНЕ ВПРОВАДЖЕННЯ В БУДЬ-ЯКЕ МЕНЮ ВИБОРУ
+    // 2. УНІВЕРСАЛЬНЕ ВПРОВАДЖЕННЯ В МЕНЮ КАРТКИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
-        // Перевірка: чи містить меню стандартні ідентифікатори закладок Lampa
-        var hasBookmarkIds = params.items && params.items.some(function(i) { 
-            return i.id === 'wath' || i.id === 'book' || i.id === 'like' || i.id === 'history'; 
+        var isFav = params.items && params.items.some(function(i) { 
+            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
         });
 
-        // Також перевіряємо заголовок (про всяк випадок)
-        var isBookTitle = params.title && (
-            params.title.toLowerCase().indexOf('вибране') !== -1 || 
-            params.title.toLowerCase().indexOf('закладки') !== -1 ||
-            params.title.toLowerCase().indexOf('избранное') !== -1
-        );
-
-        if (hasBookmarkIds || isBookTitle) {
+        if (isFav) {
             var folders = getFolders();
-            var active = Lampa.Activity.active();
-            var movie = active.card || active.data;
+            var movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
 
             if (folders.length > 0 && movie) {
-                // Додаємо роздільник
                 params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
-
-                // Додаємо папки
                 folders.forEach(function(f, i) {
-                    params.items.push({
-                        title: '📁 ' + f.name,
-                        is_custom_folder: true,
-                        f_idx: i
-                    });
+                    params.items.push({ title: '📁 ' + f.name, is_custom_folder: true, f_idx: i });
                 });
 
-                // Перехоплюємо функцію вибору
                 var originalOnSelect = params.onSelect;
                 params.onSelect = function (item) {
                     if (item.is_custom_folder) {
@@ -131,11 +125,11 @@
                         var target = fUpdate[item.f_idx];
                         if (!target.list) target.list = [];
                         
-                        // Перевірка на дублікат
-                        var exists = target.list.some(function(m) { return m.id == movie.id; });
+                        // Зберігаємо тільки необхідні дані фільму, щоб не перевантажувати пам'ять
+                        var movieData = JSON.parse(JSON.stringify(movie));
                         
-                        if (!exists) {
-                            target.list.push(movie);
+                        if (!target.list.some(function(m) { return m.id == movieData.id; })) {
+                            target.list.push(movieData);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
@@ -149,5 +143,4 @@
         }
         originalSelectShow.call(Lampa.Select, params);
     };
-
 })();
