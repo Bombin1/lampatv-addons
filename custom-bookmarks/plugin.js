@@ -1,12 +1,11 @@
 function () {
     'use strict';
 
-    // Ключ для збереження у Storage
     var STORAGE_KEY = 'custom_bookmarks';
 
     // Отримати список закладок
     function getBookmarks() {
-        return Lampa.Storage.get(STORAGE_KEY, '[]');
+        return Lampa.Storage.get(STORAGE_KEY, []);
     }
 
     // Зберегти список закладок
@@ -15,10 +14,11 @@ function () {
     }
 
     // Додати нову закладку
-    function addBookmark(title, url) {
+    function addBookmark(item) {
         var list = getBookmarks();
-        list.push({ title: title, url: url });
+        list.push({ title: item.title, url: item.url });
         saveBookmarks(list);
+        Lampa.Toast.show('✅ Додано в закладки');
     }
 
     // Видалити закладку
@@ -40,7 +40,6 @@ function () {
                 return {
                     title: item.title,
                     subtitle: item.url,
-                    // При натисканні відкриваємо діалог видалення
                     onClick: function(){
                         Lampa.Dialog.confirm({
                             title: 'Видалити закладку?',
@@ -64,10 +63,22 @@ function () {
         showBookmarks();
     });
 
-    // Для тесту: додаємо одну закладку при першому запуску
-    if (getBookmarks().length === 0) {
-        addBookmark('Приклад закладки', 'https://example.com');
-    }
+    // Додаємо кнопку ⭐ у картку
+    Lampa.Template.add('card', function(card, data){
+        var btn = $('<div class="card__bookmark">⭐</div>');
+        btn.css({
+            position: 'absolute',
+            top: '5px',
+            right: '5px',
+            cursor: 'pointer',
+            'font-size': '20px'
+        });
+        btn.on('click', function(e){
+            e.stopPropagation();
+            addBookmark(data);
+        });
+        card.find('.card__view').append(btn);
+    });
 
-    console.log('✅ Custom Bookmarks plugin loaded');
+    console.log('✅ Custom Bookmarks plugin initialized');
 }
