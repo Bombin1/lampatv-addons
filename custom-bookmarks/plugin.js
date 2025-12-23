@@ -1,24 +1,13 @@
 (function(){
     if (typeof Lampa === 'undefined') return;
 
-    const NS = 'custom_bookmarks';
-
-    // Додаємо пункт у головне меню
-    Lampa.Menu.add({
-        name: NS,
-        title: 'Мої категорії',
-        icon: 'bookmark',
-        onSelect: function(){
-            // Тут відкриваємо простий список
-            Lampa.Activity.push({
-                url: NS + '_home',
-                title: 'Мої категорії',
-                component: 'list',
-                items: [
-                    { title: 'Тестовий елемент 1' },
-                    { title: 'Тестовий елемент 2' }
-                ]
-            });
-        }
+    Lampa.Activity.push({
+        url: 'test_plugin',
+        title: 'Тестовий плагін',
+        component: 'list',
+        items: [
+            { title: 'Плагін працює ✅' },
+            { title: 'Версія Lampa: 3.1.2' }
+        ]
     });
 })();
