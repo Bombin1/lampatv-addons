@@ -1,9 +1,20 @@
 (function(){
-    try {
-        // Мінімальний no-op без залежностей
-        // Без emoji, ES6, класів, сторонніх викликів
-        console.log('Custom Bookmarks: file loaded');
-    } catch(e){
-        // Навіть якщо консоль недоступна
-    }
+    if (typeof Lampa === 'undefined') return;
+
+    Lampa.Menu.add({
+        id: 'custom_bookmarks',
+        title: 'Закладки'
+    }, function(){
+        Lampa.Activity.push({
+            url: 'custom_bookmarks',
+            title: 'Закладки',
+            component: 'list',
+            items: [
+                { title: '✅ Плагін працює' },
+                { title: '📌 Меню додано' }
+            ]
+        });
+    });
+
+    console.log('✅ Custom Bookmarks plugin initialized');
 })();
