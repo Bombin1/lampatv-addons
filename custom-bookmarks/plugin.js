@@ -4,75 +4,126 @@
     function CustomBookmarks() {
         var items = [];
         
-        // Завантаження даних
-        var storage = Lampa.Storage.get('custom_bookmarks_data', '[]');
-        try {
-            items = JSON.parse(storage);
-        } catch(e) {
-            items = [];
-        }
-
-        // Функція для створення пункту меню
-        this.addMenuItem = function() {
-            if ($('.menu .menu__list').length) {
-                // Перевірка, чи ми вже не додали цей пункт
-                if ($('.menu__item--custom-bookmarks').length) return;
-
-                var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-8-2h2v-4h4v-2h-4V7h-2v4H7v2h4z" fill="white"/></svg></div><div class="menu__text">Власні закладки</div></li>');
-                
-                menu_item.on('hover:enter', function () {
-                    Lampa.Activity.push({
-                        url: '',
-                        title: 'Власні закладки',
-                        component: 'custom_bookmarks',
-                        page: 1
-                    });
-                });
-
-                $('.menu .menu__list').append(menu_item);
+        // Завантаження даних зі сховища
+        var load = function() {
+            var storage = Lampa.Storage.get('custom_bookmarks_data', '[]');
+            try {
+                items = JSON.parse(storage);
+            } catch(e) {
+                items = [];
             }
         };
 
-        // Реєстрація компонента для відображення вмісту
-        Lampa.Component.add('custom_bookmarks', function (object) {
-            var comp = this;
-            this.create = function () {
-                var gui = $('<div class="category-full"></div>');
-                if (items.length === 0) {
-                    gui.append('<div class="empty" style="text-align:center; padding: 40px;">У вас ще немає власних категорій</div>');
-                } else {
-                    items.forEach(function(cat) {
-                        gui.append('<div class="category-title" style="padding: 20px; font-size: 1.5em; color: #fff;">' + cat.name + ' (' + cat.list.length + ')</div>');
-                    });
-                }
-                return gui;
-            };
-            this.render = function () { return this.create(); };
-        });
+        var save = function() {
+            Lampa.Storage.set('custom_bookmarks_data', JSON.stringify(items));
+        };
 
-        // Додаємо кнопку в картку фільму (вона з'явиться внизу під головними кнопками)
+        load();
+
+        // 1. Додавання кнопки в картку фільму
         Lampa.Listener.follow('full', function (e) {
             if (e.type === 'complite') {
                 var btn = $('<div class="full-start__button selector button--custom-book"><span>Власні категорії</span></div>');
+                
                 btn.on('click', function () {
-                    Lampa.Noty.show('Ви натиснули на власні категорії!');
-                    // Тут буде логіка вибору категорій (додамо пізніше, спочатку перевіримо меню)
+                    var menu = [
+                        { title: ' + Створити категорію', action: 'create' }
+                    ];
+
+                    items.forEach(function(cat, index) {
+                        menu.push({ title: cat.name, action: 'add', index: index });
+                    });
+
+                    Lampa.Select.show({
+                        title: 'Куди додати?',
+                        items: menu,
+                        onSelect: function (a) {
+                            if (a.action === 'create') {
+                                Lampa.Input.edit({
+                                    value: '',
+                                    title: 'Назва нової категорії'
+                                }, function (name) {
+                                    if (name) {
+                                        items.push({ name: name, list: [e.data] });
+                                        save();
+                                        Lampa.Noty.show('Створено та додано: ' + name);
+                                    }
+                                });
+                            } else if (a.action === 'add') {
+                                var category = items[a.index];
+                                if (!category.list.find(function(m){ return m.id == e.data.id })) {
+                                    category.list.push(e.data);
+                                    save();
+                                    Lampa.Noty.show('Додано в ' + category.name);
+                                } else {
+                                    Lampa.Noty.show('Вже є в цій категорії');
+                                }
+                            }
+                        }
+                    });
                 });
+
                 e.object.render().find('.full-start__buttons').append(btn);
             }
         });
 
-        // Постійна перевірка наявності меню (якщо додаток завантажився повільно)
-        var timer = setInterval(this.addMenuItem, 1000);
-        this.addMenuItem();
+        // 2. Логіка відображення закладок у меню
+        Lampa.Component.add('custom_bookmarks', function (object) {
+            var comp = this;
+            var scroll = new Lampa.Scroll({mask: true, over: true});
+            var files = new Lampa.Files(object);
+            
+            this.create = function () {
+                var gui = $('<div class="category-full"></div>');
+                
+                if (items.length === 0) {
+                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.2em;">Тут поки порожньо...</div>');
+                } else {
+                    items.forEach(function(cat) {
+                        if (cat.list.length > 0) {
+                            var row = $('<div class="category-list"><div class="category-title" style="padding: 20px 40px; font-size: 1.8em; font-weight: bold; color: #fff;">' + cat.name + '</div><div class="category-items" style="display: flex; flex-wrap: wrap; padding: 0 40px;"></div></div>');
+                            
+                            cat.list.forEach(function(movie) {
+                                var card = Lampa.Template.get('card', movie);
+                                card.addClass('selector');
+                                card.on('click', function() {
+                                    Lampa.Activity.push({
+                                        url: movie.url,
+                                        title: movie.title || movie.name,
+                                        component: 'full',
+                                        id: movie.id,
+                                        method: movie.name ? 'tv' : 'movie',
+                                        card: movie
+                                    });
+                                });
+                                row.find('.category-items').append(card);
+                            });
+                            gui.append(row);
+                        }
+                    });
+                }
+                
+                scroll.append(gui);
+                return scroll.render();
+            };
+
+            this.render = function () { return this.create(); };
+        });
+
+        // 3. Додавання в бічне меню (таймер для надійності)
+        this.addMenuItem = function() {
+            if ($('.menu .menu__list').length && !$('.menu__item--custom-bookmarks').length) {
+                var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z" fill="white"/></svg></div><div class="menu__text">Власні закладки</div></li>');
+                menu_item.on('hover:enter', function () {
+                    Lampa.Activity.push({ title: 'Власні закладки', component: 'custom_bookmarks', page: 1 });
+                });
+                $('.menu .menu__list').append(menu_item);
+            }
+        };
+
+        var timer = setInterval(this.addMenuItem.bind(this), 1000);
     }
 
-    // Запуск
-    if (window.appready) {
-        new CustomBookmarks();
-    } else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') new CustomBookmarks();
-        });
-    }
+    if (window.appready) new CustomBookmarks();
+    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') new CustomBookmarks(); });
 })();
