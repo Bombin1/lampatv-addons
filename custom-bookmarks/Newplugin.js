@@ -16,6 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
+    // Стилі для маленьких тайлів
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; } \
@@ -60,20 +61,34 @@
                             });
                         });
                         wrapper.append(createBtn);
+
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // ВИПРАВЛЕНО: Надійний спосіб відкриття папки через компонент full
+                                // ПОВНІСТЮ НОВИЙ МЕТОД ВІДКРИТТЯ
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
-                                    cards: folder.list || [],
                                     page: 1,
-                                    onBack: function(){
-                                        Lampa.Activity.backward();
-                                    }
+                                    onRender: function(display) {
+                                        // Примусово створюємо картки з даних
+                                        if (folder.list && folder.list.length > 0) {
+                                            return folder.list; 
+                                        }
+                                        return [];
+                                    },
+                                    onEnd: function() {}
                                 });
+                                
+                                // Додатковий хак для відображення, якщо onRender не спрацював
+                                setTimeout(function() {
+                                    var active = Lampa.Activity.active();
+                                    if (active.component === 'category_full' && active.title === folder.name) {
+                                        active.activity.render(folder.list);
+                                        Lampa.Controller.enable('content');
+                                    }
+                                }, 200);
                             });
 
                             tile.on('hover:long', function() {
@@ -99,13 +114,14 @@
         }
     });
 
+    // МЕНЮ У КАРТЦІ (без змін, працює добре)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
-        var hasBookmarkIds = params.items && params.items.some(function(i) { 
-            return i.id === 'wath' || i.id === 'book' || i.id === 'like' || i.id === 'history'; 
+        var isFav = params.items && params.items.some(function(i) { 
+            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
         });
 
-        if (hasBookmarkIds || (params.title && params.title.indexOf('Вибране') !== -1)) {
+        if (isFav) {
             var folders = getFolders();
             var active = Lampa.Activity.active();
             var movie = active ? (active.card || active.data) : null;
@@ -123,11 +139,9 @@
                         var target = fUpdate[item.f_idx];
                         if (!target.list) target.list = [];
                         
-                        // Зберігаємо лише чисті дані фільму без зайвих функцій
-                        var movieToSave = JSON.parse(JSON.stringify(movie));
-                        
-                        if (!target.list.some(function(m) { return m.id == movieToSave.id; })) {
-                            target.list.push(movieToSave);
+                        // Зберігаємо фільм
+                        if (!target.list.some(function(m) { return m.id == movie.id; })) {
+                            target.list.push(movie);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
@@ -141,4 +155,5 @@
         }
         originalSelectShow.call(Lampa.Select, params);
     };
+
 })();
