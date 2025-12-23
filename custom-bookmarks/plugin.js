@@ -1,76 +1,93 @@
 (function () {
     'use strict';
 
-    function CustomBookmarksInFavorites() {
+    function DeepCustomBookmarks() {
         var items = [];
         
+        // Завантаження власних категорій
         var load = function() {
             try {
-                items = JSON.parse(Lampa.Storage.get('custom_bookmarks_items', '[]'));
+                items = JSON.parse(Lampa.Storage.get('custom_bookmarks_list', '[]'));
             } catch(e) { 
                 items = []; 
             }
         };
 
         var save = function() {
-            Lampa.Storage.set('custom_bookmarks_items', JSON.stringify(items));
+            Lampa.Storage.set('custom_bookmarks_list', JSON.stringify(items));
         };
 
         load();
 
-        // 1. Кнопка в картці фільму для вибору категорії
-        Lampa.Listener.follow('full', function (e) {
-            if (e.type === 'complite') {
-                var render = e.object.render();
-                var container = render.find('.full-start__buttons');
-                
-                if (container.length && !render.find('.button--custom-bookmarks').length) {
-                    var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в категорію</span></div>');
-                    
-                    btn.on('click', function () {
-                        var menu = [{ title: ' + Нова категорія', action: 'create' }];
-                        items.forEach(function(cat, i) { 
-                            menu.push({ title: cat.name, action: 'add', index: i }); 
-                        });
+        // 1. ПЕРЕХОПЛЕННЯ МЕНЮ ВИБОРУ (Select)
+        var originalSelectShow = Lampa.Select.show;
 
-                        Lampa.Select.show({
-                            title: 'Оберіть категорію',
-                            items: menu,
-                            onSelect: function (a) {
-                                if (a.action === 'create') {
-                                    Lampa.Input.edit({ value: '', title: 'Назва' }, function (name) {
-                                        if (name) {
-                                            items.push({ name: name, list: [e.data] });
-                                            save();
-                                            Lampa.Noty.show('Створено та додано');
-                                        }
-                                    });
-                                } else {
-                                    var category = items[a.index];
-                                    if (!category.list) category.list = [];
-                                    if (!category.list.find(function(m){ return m.id == e.data.id })) {
-                                        category.list.push(e.data);
-                                        save();
-                                        Lampa.Noty.show('Додано в ' + category.name);
-                                    }
-                                }
+        Lampa.Select.show = function(params) {
+            // Перевіряємо, чи це меню додавання в закладки (title зазвичай "Закладки")
+            if (params.title === Lampa.Lang.translate('title_book')) {
+                
+                // Додаємо пункт створення нової категорії
+                params.items.push({
+                    title: ' + Створити свою категорію',
+                    custom_create: true
+                });
+
+                // Додаємо існуючі власні категорії в меню
+                items.forEach(function(cat, index) {
+                    params.items.push({
+                        title: cat.name,
+                        custom_category: true,
+                        custom_index: index
+                    });
+                });
+
+                // Перехоплюємо вибір (onSelect)
+                var originalOnSelect = params.onSelect;
+                params.onSelect = function(item) {
+                    var movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
+
+                    if (item.custom_create) {
+                        // Логіка створення нової категорії
+                        Lampa.Input.edit({
+                            value: '',
+                            title: 'Назва нової категорії'
+                        }, function (name) {
+                            if (name) {
+                                items.push({ name: name, list: [movie] });
+                                save();
+                                Lampa.Noty.show('Категорію створено та фільм додано');
                             }
                         });
-                    });
-                    container.append(btn);
-                }
+                    } else if (item.custom_category) {
+                        // Додавання у вже існуючу власну категорію
+                        var cat = items[item.custom_index];
+                        if (!cat.list) cat.list = [];
+                        
+                        if (!cat.list.find(function(m){ return m.id == movie.id })) {
+                            cat.list.push(movie);
+                            save();
+                            Lampa.Noty.show('Додано в ' + cat.name);
+                        } else {
+                            Lampa.Noty.show('Вже є в цій категорії');
+                        }
+                    } else {
+                        // Якщо обрано стандартну категорію (Дивлюсь, Черга тощо)
+                        originalOnSelect(item);
+                    }
+                };
             }
-        });
+            
+            // Викликаємо оригінальне вікно Select з нашими модифікаціями
+            originalSelectShow.call(Lampa.Select, params);
+        };
 
-        // 2. Інтеграція у стандартне меню "Вибране" (bookmarks)
+        // 2. ВІДОБРАЖЕННЯ У РОЗДІЛІ «ВИБРАНЕ»
         Lampa.Listener.follow('activity', function (e) {
-            // Перевіряємо, чи відкрився компонент закладок
             if (e.type === 'start' && e.component === 'bookmarks') {
                 var render = e.object.render();
-                load(); // Оновлюємо дані
+                load();
 
                 if (items.length > 0) {
-                    // Додаємо наші категорії в кінець стандартного списку закладок
                     items.forEach(function(cat) {
                         if (cat.list && cat.list.length > 0) {
                             var row = $('<div class="category-list"><div class="category-title" style="padding: 20px 40px; font-size: 1.5em; color: #fff; font-weight: bold;">' + cat.name + '</div><div class="category-items" style="display: flex; flex-wrap: wrap; padding: 0 40px;"></div></div>');
@@ -85,35 +102,30 @@
                                     });
                                 });
 
-                                // Довге натискання для видалення
                                 card.on('hover:long', function() {
                                     Lampa.Select.show({
                                         title: 'Дія',
-                                        items: [{title: 'Видалити з категорії', action: 'delete'}],
+                                        items: [{title: 'Видалити з "' + cat.name + '"', action: 'delete'}],
                                         onSelect: function() {
                                             cat.list = cat.list.filter(function(m) { return m.id !== movie.id });
                                             save();
                                             Lampa.Noty.show('Видалено');
-                                            card.remove(); // Видаляємо візуально
+                                            card.remove();
                                         }
                                     });
                                 });
 
                                 row.find('.category-items').append(card);
                             });
-                            
-                            // Вставляємо наш рядок у контейнер стандартних закладок
                             render.append(row);
                         }
                     });
-                    
-                    // Оновлюємо контролер, щоб пульт бачив нові елементи
                     Lampa.Controller.enable('content');
                 }
             }
         });
     }
 
-    if (window.appready) CustomBookmarksInFavorites();
-    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') CustomBookmarksInFavorites(); });
+    if (window.appready) DeepCustomBookmarks();
+    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') DeepCustomBookmarks(); });
 })();
