@@ -1,164 +1,386 @@
 (function () {
-    'use strict';
+  'use strict';
 
-    function CustomBookmarks() {
-        var items = [];
+  // Ключ у Storage: 'favorite' з customTypes (як у my_bookmarks)
+  const STORAGE_KEY = 'favorite';
 
-        function load() {
-            try {
-                items = Lampa.Storage.get('custom_bookmarks_data', []);
-                if (typeof items === 'string') items = JSON.parse(items);
-                if (!Array.isArray(items)) items = [];
-            } catch (e) {
-                items = [];
-            }
-        }
+  // ===== Дані і утиліти =====
+  function getFavorite() {
+    const fav = Lampa.Storage.get(STORAGE_KEY, {}) || {};
+    fav.card = fav.card || [];           // список усіх карток (об’єкти, які Lampa кешує)
+    fav.customTypes = fav.customTypes || {};  // map { name -> uid }
+    return fav;
+  }
 
-        function save() {
-            Lampa.Storage.set('custom_bookmarks_data', items);
-        }
+  function saveFavorite(obj) {
+    Lampa.Storage.set(STORAGE_KEY, obj);
+    Lampa.Favorite.init();
+  }
 
-        load();
+  function getTypeList(name) {
+    const fav = getFavorite();
+    const uid = fav.customTypes[name];
+    if (!uid) return [];
+    return fav[uid] || [];
+  }
 
-        // Компонент перегляду закладок
-        Lampa.Component.add('custom_bookmarks', function () {
-            var comp = this;
-            var scroll = new Lampa.Scroll({ mask: true, over: true });
+  function hasTypeId(fav, typeIdCandidate) {
+    const types = fav.customTypes;
+    for (const k in types) {
+      if (Object.prototype.hasOwnProperty.call(types, k) && types[k] === typeIdCandidate) return true;
+    }
+    return false;
+  }
 
-            this.create = function () {
-                var gui = $('<div class="category-full"></div>');
-                load();
+  function getTypesWithoutSystem(fav) {
+    return Object.keys(fav.customTypes || {}).filter(x => x !== 'card');
+  }
 
-                if (!items.length) {
-                    gui.append('<div class="empty" style="text-align:center; padding: 100px; font-size: 1.5em;">Закладки порожні</div>');
-                } else {
-                    var row = $('<div class="category-list"><div class="category-title" style="padding:20px 40px;font-size:1.8em;color:#fff;font-weight:bold;">Мої закладки</div><div class="category-items" style="display:flex;flex-wrap:wrap;padding:0 40px;"></div></div>');
-                    items.forEach(function (movie) {
-                        var card = Lampa.Template.get('card', movie);
-                        card.addClass('selector');
-                        card.on('click', function () {
-                            Lampa.Activity.push({
-                                url: movie.url,
-                                title: movie.title || movie.name,
-                                component: 'full',
-                                id: movie.id,
-                                method: movie.name ? 'tv' : 'movie',
-                                card: movie
-                            });
-                        });
-                        row.find('.category-items').append(card);
-                    });
-                    gui.append(row);
-                }
-                return scroll.render().append(gui);
-            };
+  function createType(name) {
+    const fav = getFavorite();
+    if (fav.customTypes[name]) {
+      const err = new Error('custom.fav.name-used');
+      err.code = 'exception';
+      throw err;
+    }
+    const uid = Lampa.Utils.uid(8).toLowerCase();
+    fav.customTypes[name] = uid;
+    fav[uid] = [];
+    saveFavorite(fav);
+    return { name, uid, counter: 0 };
+  }
 
-            this.start = function () {
-                Lampa.Controller.add('content', {
-                    toggle: function () {
-                        Lampa.Controller.collectionSet(comp.render());
-                        Lampa.Controller.collectionFocus(false, comp.render());
-                    }
-                });
-                Lampa.Controller.toggle('content');
-            };
+  function renameType(oldName, newName) {
+    const fav = getFavorite();
+    const uid = fav.customTypes[oldName];
+    if (!uid) {
+      const err = new Error('custom.fav.not-defined');
+      err.code = 'exception';
+      throw err;
+    }
+    if (fav.customTypes[newName]) {
+      const err = new Error('custom.fav.name-used');
+      err.code = 'exception';
+      throw err;
+    }
+    fav.customTypes[newName] = uid;
+    delete fav.customTypes[oldName];
+    saveFavorite(fav);
+    return true;
+  }
 
-            this.render = function () {
-                return this.create();
-            };
+  function removeType(name) {
+    const fav = getFavorite();
+    const uid = fav.customTypes[name];
+    if (!uid) {
+      const err = new Error('custom.fav.not-defined');
+      err.code = 'exception';
+      throw err;
+    }
+    delete fav.customTypes[name];
+    delete fav[uid];
+    saveFavorite(fav);
+    return true;
+  }
 
-            this.pause = function () {};
-            this.stop = function () {};
-            this.destroy = function () {
-                scroll.destroy();
-            };
-        });
+  function toggleCard(typeName, cardData) {
+    const fav = getFavorite();
+    const uid = fav.customTypes[typeName];
+    if (!uid) {
+      const err = new Error('custom.fav.not-defined');
+      err.code = 'exception';
+      throw err;
+    }
+    const bucket = fav[uid] || [];
+    fav[uid] = bucket;
 
-        // Додавання кнопки у картку фільму/серіалу — без .render(), з фолбеками
-        Lampa.Listener.follow('full', function (e) {
-            if (e.type !== 'complite' || !e) return;
+    const master = fav.customTypes.card || fav.card; // “системний” список карток
+    const idxInBucket = bucket.indexOf(cardData.id);
 
-            // root: або e.object.render(), або e.object (як jQuery), або видимий шар
-            var root = null;
-
-            if (e.object && typeof e.object.render === 'function') {
-                // У деяких збірках є render()
-                try { root = e.object.render(); } catch (_) { root = null; }
-            }
-            if (!root && e.object && e.object.jquery) {
-                // Якщо це jQuery-елемент
-                root = e.object;
-            }
-            if (!root) {
-                // Останній фолбек — шукаємо активний шар full-екрана
-                root = $('.layer--modal:visible, .layer--show:visible').last();
-                if (!root.length) root = $('.full'); // ще один фолбек
-            }
-
-            var container = root.find('.full-start__buttons');
-            if (!container.length) return;
-
-            // Уникнути дубля
-            if (root.find('.button--custom-bookmarks').length) return;
-
-            var btn = $('<div class="full-start__button selector button--custom-bookmarks"><span>Додати в закладки</span></div>');
-
-            btn.on('click', function () {
-                // e.data може бути відсутнім у деяких потоках — візьмемо дані з активності, якщо потрібно
-                var data = e.data || Lampa.Activity && Lampa.Activity.active() && Lampa.Activity.active().card || null;
-                if (!data || !data.id) {
-                    Lampa.Noty.show('Не вдалось отримати дані картки');
-                    return;
-                }
-
-                load();
-                var exists = items.find(function (m) { return String(m.id) === String(data.id); });
-                if (!exists) {
-                    // Зберігаємо мінімально потрібні поля, щоб картка коректно рендерилась
-                    items.push({
-                        id: data.id,
-                        title: data.title || data.name || '',
-                        name: data.name || '',
-                        url: data.url || '',
-                        poster: data.poster || data.poster_path || '',
-                        release_date: data.release_date || data.first_air_date || '',
-                        vote_average: data.vote_average || 0
-                    });
-                    save();
-                    Lampa.Noty.show('✅ Додано в закладки');
-                } else {
-                    Lampa.Noty.show('⚠️ Вже є у закладках');
-                }
-            });
-
-            container.append(btn);
-        });
-
-        // Пункт у меню зліва
-        setTimeout(function(){
-    var root = $('.layer--modal:visible, .layer--show:visible, .full').last();
-    if (!root.length) return;
-
-    var btn = $('<div class="selector" style="position:fixed;top:50px;right:50px;z-index:9999;background:#222;color:#fff;padding:10px;border-radius:5px;">Тестова кнопка</div>');
-    btn.on('click', function(){
-        Lampa.Noty.show('✅ Кнопка працює');
-    });
-
-    root.append(btn);
-}, 3000);
-        function addMenuItem() {
-            if ($('.menu .menu__list').length && !$('.menu__item--custom-bookmarks').length) {
-                var menu_item = $('<li class="menu__item selector menu__item--custom-bookmarks"><div class="menu__ico"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="white" stroke-width="2"><path d="M19 21L12 16L5 21V5C5 3.89543 5.89543 3 7 3H17C18.1046 3 19 3.89543 19 5V21Z"/></svg></div><div class="menu__text">Власні закладки</div></li>');
-                menu_item.on('hover:enter', function () {
-                    Lampa.Activity.push({ title: 'Власні закладки', component: 'custom_bookmarks', page: 1 });
-                });
-                $('.menu .menu__list').append(menu_item);
-            }
-        }
-
-        addMenuItem();
+    if (idxInBucket === -1) {
+      // додати
+      // прибрати дубль із master за потреби, додати cardData та id у bucket
+      const filtered = (fav.customTypes.card ? fav.customTypes.card : master).filter(x => x.id !== cardData.id);
+      Lampa.Arrays.insert(filtered, 0, cardData);
+      Lampa.Arrays.insert(bucket, 0, cardData.id);
+      // синхронізуємо fav.card
+      fav.card = filtered;
+      // нотифікація (не обов’язково)
+      Lampa.Favorite.listener.send('add', { card: cardData, where: typeName, typeId: uid });
+    } else {
+      // видалити
+      Lampa.Arrays.remove(bucket, cardData.id);
+      // якщо картка ніде не використовується — заберемо з fav.card
+      const stillUsed = Object.keys(fav.customTypes)
+        .filter(k => k !== 'card' && k !== 'any')
+        .some(k => (fav[fav.customTypes[k]] || []).indexOf(cardData.id) >= 0);
+      if (!stillUsed) {
+        fav.card = fav.card.filter(x => x.id !== cardData.id);
+        Lampa.Favorite.listener.send('remove', { card: cardData, method: 'card', where: typeName, typeId: uid });
+      } else {
+        Lampa.Favorite.listener.send('remove', { card: cardData, method: 'id', where: typeName, typeId: uid });
+      }
     }
 
-    if (window.appready) CustomBookmarks();
-    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') CustomBookmarks(); });
+    saveFavorite(fav);
+    return { name: typeName, uid, counter: bucket.length };
+  }
+
+  // ===== Інтеграція в UI =====
+
+  // Локалізація (мінімум)
+  Lampa.Lang.add({
+    rename: { en: 'Rename', uk: 'Змінити ім’я', ru: 'Изменить имя' },
+    invalid_name: { en: 'Invalid name', uk: 'Некоректне ім’я', ru: 'Некорректное имя' }
+  });
+
+  // Стилі для іконки у картці (зірка)
+  const starSvg = '<svg width="24" height="23" viewBox="0 0 24 23" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.6162 7.10981L15.8464 7.55198L16.3381 7.63428L22.2841 8.62965C22.8678 8.72736 23.0999 9.44167 22.6851 9.86381L18.4598 14.1641L18.1104 14.5196L18.184 15.0127L19.0748 20.9752C19.1622 21.5606 18.5546 22.002 18.025 21.738L12.6295 19.0483L12.1833 18.8259L11.7372 19.0483L6.34171 21.738C5.81206 22.002 5.20443 21.5606 5.29187 20.9752L6.18264 15.0127L6.25629 14.5196L5.9069 14.1641L1.68155 9.86381C1.26677 9.44167 1.49886 8.72736 2.08255 8.62965L8.02855 7.63428L8.52022 7.55198L8.75043 7.10981L11.5345 1.76241C11.8078 1.23748 12.5589 1.23748 12.8322 1.76241L15.6162 7.10981Z" stroke="currentColor" stroke-width="2.2"></path></svg>';
+  Lampa.Template.add('custom-fav-icon-svg', starSvg);
+  Lampa.Template.add('custom-fav-icon', '<div class="card__icon icon--star">' + starSvg + '</div>');
+
+  // Рисуємо зірку у картці, якщо елемент у будь-якій кастомній категорії
+  function refreshBookmarkIcon() {
+    const activity = Lampa.Activity.active();
+    if (!activity || activity.name !== 'full') return;
+    const data = activity.data;
+    const cards = (getFavorite().card || []).map(c => c.id);
+    const iconHost = $('.card__icons-inner', activity.activity.render());
+    const icon = $('.icon--star', iconHost);
+    const exists = cards.indexOf(data.id) >= 0;
+
+    if (exists) {
+      if (!icon.length) iconHost.append(Lampa.Template.get('custom-fav-icon'));
+      else icon.removeClass('hidden');
+    } else {
+      if (icon.length) icon.addClass('hidden');
+    }
+  }
+
+  // При відкритті full: слухаємо подію і прив’язуємося до стандартної кнопки “книжка”
+  Lampa.Listener.follow('full', function (e) {
+    if (e.type !== 'complite') return;
+    const act = Lampa.Activity.active();
+    refreshBookmarkIcon();
+
+    const bookBtn = $('.button--book', act.activity.render());
+    if (!bookBtn.length) return;
+
+    bookBtn.off('hover:enter.custom-bookmarks').on('hover:enter.custom-bookmarks', function () {
+      const fav = getFavorite();
+      const types = getTypesWithoutSystem(fav);
+      const data = act.data;
+
+      // селектбокс: створити нову або додати/зняти у наявній
+      const items = [{ title: ' + Створити категорію', _create: true }].concat(
+        types.map(name => {
+          const list = getTypeList(name);
+          const checked = list.indexOf(data.id) >= 0;
+          return { title: name, _name: name, checkbox: true, checked };
+        })
+      );
+
+      Lampa.Select.show({
+        title: 'Власні закладки',
+        items,
+        onSelect: function (choice) {
+          if (choice._create) {
+            Lampa.Input.edit({ title: Lampa.Lang.translate('filter_set_name'), value: '', free: true, nosave: true }, function (newName) {
+              if (!newName || newName === 'card') {
+                Lampa.Noty.show(Lampa.Lang.translate('invalid_name'));
+                return;
+              }
+              try {
+                const created = createType(newName);
+                Lampa.Noty.show('Категорію створено');
+                // одразу додамо поточну картку в нову категорію
+                toggleCard(newName, data);
+              } catch (err) {
+                Lampa.Noty.show('Помилка: ' + (err.code || err.message));
+              }
+            });
+          } else if (choice._name) {
+            const res = toggleCard(choice._name, data);
+            Lampa.Noty.show(res ? 'Оновлено' : 'Помилка');
+            refreshBookmarkIcon();
+          }
+        },
+        onBack: function () {
+          Lampa.Controller.toggle('content');
+        }
+      });
+    });
+  });
+
+  // Додаємо “панель категорій” у екрані Закладки (bookmarks)
+  function renderCategoryRegister() {
+    const active = Lampa.Activity.active();
+    if (!active || active.name !== 'bookmarks') return;
+
+    // Кнопка “Створити категорію”
+    const reg = Lampa.Template.js('register').addClass('new-custom-type');
+    reg.find('.register__counter').html('<img src="./img/icons/add.svg"/>');
+    $('.register:first').before(reg);
+
+    // Обробник створення
+    reg.on('hover:enter', function () {
+      Lampa.Input.edit({ title: Lampa.Lang.translate('filter_set_name'), value: '', free: true, nosave: true }, function (newName) {
+        if (!newName || newName === 'card') {
+          Lampa.Controller.toggle('content');
+          Lampa.Noty.show(Lampa.Lang.translate('invalid_name'));
+          return;
+        }
+        try {
+          const created = createType(newName);
+          drawTypeChip(created);
+        } finally {
+          Lampa.Controller.toggle('content');
+        }
+      });
+    });
+
+    // Вивести всі категорії (чіпи з лічильниками)
+    const fav = getFavorite();
+    getTypesWithoutSystem(fav).reverse().forEach(function (name) {
+      const uid = fav.customTypes[name];
+      const counter = (fav[uid] || []).length;
+      drawTypeChip({ name, uid, counter });
+    });
+  }
+
+  // Намалювати один чіп категорії з меню (перейменувати/видалити)
+  function drawTypeChip(info) {
+    const chip = Lampa.Template.js('register')
+      .addClass('custom-type')
+      .addClass('custom-type-' + info.uid);
+    chip.find('.register__name').text(info.name).addClass('custom-type-' + info.uid);
+    chip.find('.register__counter').text(info.counter || 0).addClass('custom-type-' + info.uid);
+
+    const activityRender = Lampa.Activity.active().activity.render();
+
+    chip.on('hover:long', function () {
+      const items = [
+        { title: Lampa.Lang.translate('rename'), action: 'rename' },
+        { title: Lampa.Lang.translate('settings_remove'), action: 'remove' }
+      ];
+      const back = Lampa.Controller.last();
+
+      Lampa.Select.show({
+        title: Lampa.Lang.translate('title_action'),
+        items,
+        onBack: function () {
+          Lampa.Controller.toggle(back);
+          Lampa.Controller.toggle('content');
+        },
+        onSelect: function (choice) {
+          switch (choice.action) {
+            case 'remove':
+              try {
+                removeType(info.name);
+                chip.remove();
+                Lampa.Controller.toggle(back);
+                Lampa.Controller.toggle('content');
+              } finally {
+                break;
+              }
+            case 'rename':
+              Lampa.Input.edit({ title: Lampa.Lang.translate('filter_set_name'), value: info.name, free: true, nosave: true }, function (newName) {
+                if (!newName || newName === 'card' || newName === info.name) {
+                  Lampa.Controller.toggle('content');
+                  Lampa.Noty.show(Lampa.Lang.translate('invalid_name'));
+                  return;
+                }
+                try {
+                  renameType(info.name, newName);
+                  chip.find('.register__name').text(newName);
+                  info.name = newName;
+                } finally {
+                  Lampa.Controller.toggle(back);
+                  Lampa.Controller.scroll(activityRender).update(chip, activityRender);
+                }
+              });
+              break;
+          }
+        }
+      });
+    });
+
+    chip.on('hover:enter', function () {
+      Lampa.Activity.push({
+        url: '',
+        component: 'favorite',
+        title: info.name,
+        type: info.uid,
+        page: 1
+      });
+    });
+
+    $('.register:first', activityRender).after(chip);
+    return chip;
+  }
+
+  // Рендеримо “лінії” категорій у bookmarks (секції типу Movies/TV)
+  function renderLines() {
+    const act = Lampa.Activity.active();
+    const view = act && act.view && act.view.render && act.view.render();
+    if (!act || act.name !== 'bookmarks' || !view) return;
+
+    const fav = getFavorite();
+    const types = getTypesWithoutSystem(fav).reverse();
+    const mediaKinds = ['movies', 'tv'];
+
+    types.forEach(function (name) {
+      const uid = fav.customTypes[name];
+      const ids = fav[uid] || [];
+      const cards = fav.card.filter(c => ids.indexOf(c.id) !== -1);
+      const limited = Lampa.Arrays.clone(cards.slice(0, 14));
+      let insertIndex = 0;
+
+      mediaKinds.forEach(function (kind) {
+        const filtered = Lampa.Utils.filterCardsByType(cards, kind);
+        if (filtered.length) {
+          Lampa.Arrays.insert(limited, insertIndex, {
+            results: filtered,
+            media: kind,
+            params: {},
+            cardClass: function CustomBookmarksFolder() {
+              // форми-конструктори для “папок” можна опустити для простоти
+              return Lampa.Template.get('card', { title: name, results: filtered });
+            }
+          });
+          insertIndex++;
+        }
+      });
+
+      const section = limited.slice(0, 14);
+      section.forEach(x => (x.init = false));
+      if (section.length) {
+        act.view.render().append({ title: name, results: section, type: uid });
+      }
+    });
+  }
+
+  // Слухаємо зміну активності — коли відкривають Закладки, рендеримо панель і лінії
+  Lampa.Storage.listener.follow('change', function (ev) {
+    if (ev.name !== 'activity') return;
+    const act = Lampa.Activity.active();
+    if (act && act.name === 'bookmarks') {
+      if ($('.new-custom-type').length) return;
+      renderCategoryRegister();
+      renderLines();
+      act.view.toggle();
+    }
+  });
+
+  // Запуск
+  function start() {
+    // Вставляємо стилі для іконки зірки
+    $('<style>').prop('type', 'text/css').html(
+      '.card__icon { position: relative; } ' +
+      '.icon--star svg { position: absolute; height: 60%; width: 60%; top: 50%; left: 50%; transform: translate(-50%, -50%) }'
+    ).appendTo('head');
+  }
+
+  if (window.appready) start();
+  else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') start(); });
 })();
