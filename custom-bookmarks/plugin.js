@@ -3,120 +3,90 @@
 
     if (!window.Lampa) return;
 
-    const STORAGE_KEY = 'custom_folders_v1';
+    const STORAGE = 'custom_bookmarks_folders';
 
     function load() {
-        return Lampa.Storage.get(STORAGE_KEY, {});
+        return Lampa.Storage.get(STORAGE, []);
     }
 
     function save(data) {
-        Lampa.Storage.set(STORAGE_KEY, data);
+        Lampa.Storage.set(STORAGE, data);
     }
 
-    function getFolders() {
-        return load();
-    }
+    // Перехоплюємо стандартне меню "Вибране"
+    const originalSelect = Lampa.Select.show;
 
-    function createFolder(name) {
-        const data = load();
-        if (!data[name]) data[name] = [];
-        save(data);
-    }
+    Lampa.Select.show = function (params) {
 
-    function addToFolder(folder, card) {
-        const data = load();
-        if (!data[folder]) data[folder] = [];
+        // Це саме те меню, яке відкривається з кнопки ⭐
+        if (params && params.items && params.items.length) {
 
-        if (!data[folder].find(i => i.id === card.id)) {
-            data[folder].push(card);
-            save(data);
-        }
-    }
-
-    /* ===== ГОЛОВНЕ МЕНЮ (Мої) ===== */
-
-    Lampa.Listener.follow('menu', function (event) {
-        if (event.type !== 'build') return;
-        if (event.name !== 'my') return;
-
-        const data = getFolders();
-
-        event.items.push({
-            title: '+ Створити папку',
-            type: 'action',
-            action: function () {
-                Lampa.Input.show({
-                    title: 'Назва папки',
-                    value: '',
-                    onSubmit: function (value) {
-                        if (!value) return;
-                        createFolder(value);
-                        Lampa.Activity.replace();
-                    }
-                });
+            const card = Lampa.Activity.active()?.card;
+            if (!card || !card.id) {
+                return originalSelect.apply(this, arguments);
             }
-        });
 
-        Object.keys(data).forEach(folder => {
-            event.items.push({
-                title: folder,
-                counter: data[folder].length + ' / 500',
-                type: 'folder',
-                onSelect: function () {
-                    Lampa.Activity.push({
-                        title: folder,
-                        component: 'custom_folder',
-                        data: {
-                            title: folder,
-                            items: data[folder]
-                        }
-                    });
-                }
+            let folders = load();
+
+            // Додаємо користувацькі папки
+            folders.forEach((folder, index) => {
+                params.items.push({
+                    title: folder.name,
+                    custom: true,
+                    index: index
+                });
             });
-        });
-    });
 
-    /* ===== ВІДОБРАЖЕННЯ ПАПКИ ===== */
+            // Кнопка створення папки
+            params.items.push({
+                title: '+ Створити папку',
+                create: true
+            });
 
-    Lampa.Component.add('custom_folder', {
-        template: function () {
-            return '<div class="items"></div>';
-        },
-        onCreate: function () {
-            const items = this.data.items || [];
-            Lampa.Template.get('items').render(items, this.el.find('.items'));
-        }
-    });
+            const originalOnSelect = params.onSelect;
 
-    /* ===== КНОПКА В КАРТЦІ ФІЛЬМУ ===== */
+            params.onSelect = function (item) {
 
-    Lampa.Listener.follow('full', function (event) {
-        if (event.type !== 'build') return;
+                // Створення папки
+                if (item.create) {
+                    Lampa.Input.edit({
+                        title: 'Назва папки',
+                        value: ''
+                    }, function (name) {
+                        if (!name) return;
 
-        event.buttons.unshift({
-            title: 'В папку',
-            svg: '<svg viewBox="0 0 24 24"><path d="M10 4H2v16h20V6H12l-2-2z"/></svg>',
-            action: function () {
-                const folders = Object.keys(getFolders());
+                        folders.push({
+                            name: name,
+                            items: [card]
+                        });
 
-                if (!folders.length) {
-                    Lampa.Noty.show('Спочатку створи папку');
+                        save(folders);
+                    });
+
                     return;
                 }
 
-                Lampa.Select.show({
-                    title: 'Вибери папку',
-                    items: folders.map(name => ({
-                        title: name,
-                        folder: name
-                    })),
-                    onSelect: function (a) {
-                        addToFolder(a.folder, event.data);
-                        Lampa.Noty.show('Додано в "' + a.folder + '"');
+                // Додавання в кастомну папку
+                if (item.custom) {
+                    let folder = folders[item.index];
+                    folder.items = folder.items || [];
+
+                    if (!folder.items.find(i => i.id === card.id)) {
+                        folder.items.push(card);
+                        save(folders);
                     }
-                });
-            }
-        });
-    });
+
+                    return;
+                }
+
+                // Стандартна логіка Lampa
+                if (originalOnSelect) {
+                    originalOnSelect(item);
+                }
+            };
+        }
+
+        return originalSelect.apply(this, arguments);
+    };
 
 })();
