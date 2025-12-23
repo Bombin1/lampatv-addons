@@ -1,15 +1,22 @@
 (function(){
     if (typeof Lampa === 'undefined') return;
 
-    // Створюємо простий екран
-    Lampa.Activity.push({
-        url: 'custom_bookmarks_test',
-        title: 'Custom Bookmarks',
-        component: 'list',
-        items: [
-            { title: '✅ Плагін виконався успішно' },
-            { title: '📦 Версія Lampa: 3.1.2' },
-            { title: '🧪 Готово до розширення' }
-        ]
+    // Реєструємо пункт меню "Закладки"
+    Lampa.Menu.add({
+        id: 'custom_bookmarks',
+        title: 'Закладки'
+    }, function(){
+        // Відкриваємо екран із тестовим списком
+        Lampa.Activity.push({
+            url: 'custom_bookmarks',
+            title: 'Закладки',
+            component: 'list',
+            items: [
+                { title: '📌 Тут будуть ваші закладки' },
+                { title: '✅ Плагін виконався успішно' }
+            ]
+        });
     });
+
+    console.log('✅ Custom Bookmarks plugin initialized');
 })();
