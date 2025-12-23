@@ -2,8 +2,9 @@
   'use strict';
 
   const STORAGE_KEY = 'favorite';
+  const DEFAULT_TYPE_NAME = 'Мої закладки';
 
-  // ===== Утиліти =====
+  // ===== Утиліти з захистом =====
   function getFavorite() {
     let fav = Lampa.Storage.get(STORAGE_KEY, {});
     if (typeof fav === 'string') {
@@ -16,192 +17,165 @@
   }
 
   function saveFavorite(obj) {
-    Lampa.Storage.set(STORAGE_KEY, obj);
-    if (Lampa.Favorite && typeof Lampa.Favorite.init === 'function') Lampa.Favorite.init();
+    try {
+      Lampa.Storage.set(STORAGE_KEY, obj);
+      if (Lampa.Favorite && typeof Lampa.Favorite.init === 'function') Lampa.Favorite.init();
+    } catch (_) {}
   }
 
-  function getTypesWithoutSystem(fav) {
-    return Object.keys(fav.customTypes || {}).filter(x => x !== 'card' && x !== 'any');
-  }
-
-  function createType(name) {
+  function ensureDefaultType() {
     const fav = getFavorite();
-    if (!name || typeof name !== 'string') { Lampa.Noty.show('⚠️ Порожнє ім’я'); return null; }
-    name = name.trim();
-    if (!name || name === 'card' || name === 'any') { Lampa.Noty.show('⚠️ Некоректне ім’я'); return null; }
-    if (fav.customTypes[name]) { Lampa.Noty.show('⚠️ Категорія вже існує'); return null; }
-
-    const uid = (Lampa.Utils && typeof Lampa.Utils.uid === 'function') ? Lampa.Utils.uid(8).toLowerCase() : String(Date.now());
-    fav.customTypes[name] = uid;
-    fav[uid] = [];
-    saveFavorite(fav);
-    return { name, uid, counter: 0 };
+    if (!fav.customTypes[DEFAULT_TYPE_NAME]) {
+      const uid = (Lampa.Utils && typeof Lampa.Utils.uid === 'function') ? Lampa.Utils.uid(8).toLowerCase() : String(Date.now());
+      fav.customTypes[DEFAULT_TYPE_NAME] = uid;
+      fav[uid] = [];
+      saveFavorite(fav);
+    }
+    return { fav: getFavorite(), uid: getFavorite().customTypes[DEFAULT_TYPE_NAME] };
   }
 
-  function renameType(oldName, newName) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[oldName];
-    if (!uid) return false;
-    newName = (newName || '').trim();
-    if (!newName || fav.customTypes[newName] || newName === 'card' || newName === 'any') return false;
-    fav.customTypes[newName] = uid;
-    delete fav.customTypes[oldName];
-    saveFavorite(fav);
-    return true;
+  function extractCardData(e) {
+    const act = Lampa.Activity && Lampa.Activity.active ? Lampa.Activity.active() : null;
+    const data = (act && act.data) || (e && e.data) || (act && act.card) || (act && act.activity && act.activity.data) || {};
+    const id = data.id ?? data.ids ?? data.tmdb_id;
+    if (!id) return null;
+
+    // мінімально потрібні поля
+    return {
+      id,
+      title: data.title || data.name || '',
+      name: data.name || '',
+      url: data.url || '',
+      poster: data.poster || data.poster_path || '',
+      release_date: data.release_date || data.first_air_date || '',
+      vote_average: data.vote_average || 0,
+      source: data.source || ''
+    };
   }
 
-  function removeType(name) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[name];
-    if (!uid) return false;
-    delete fav.customTypes[name];
-    delete fav[uid];
-    saveFavorite(fav);
-    return true;
+  function isInBucket(fav, uid, id) {
+    const bucket = Array.isArray(fav[uid]) ? fav[uid] : [];
+    return bucket.indexOf(id) >= 0;
   }
 
-  function toggleCard(typeName, cardData) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[typeName];
-    if (!uid) { Lampa.Noty.show('⚠️ Категорія не знайдена'); return null; }
-
-    const id = cardData && (cardData.id ?? cardData.ids ?? cardData.tmdb_id);
-    if (!id) { Lampa.Noty.show('⚠️ Некоректні дані картки'); return null; }
-
+  function addToDefault(card) {
+    const { fav, uid } = ensureDefaultType();
     fav[uid] = Array.isArray(fav[uid]) ? fav[uid] : [];
     fav.card = Array.isArray(fav.card) ? fav.card : [];
 
-    const bucket = fav[uid];
-    const idx = bucket.indexOf(id);
-
-    if (idx === -1) {
-      bucket.push(id);
-      const minimal = {
-        id,
-        title: cardData.title || cardData.name || '',
-        name: cardData.name || '',
-        url: cardData.url || '',
-        poster: cardData.poster || cardData.poster_path || '',
-        release_date: cardData.release_date || cardData.first_air_date || '',
-        vote_average: cardData.vote_average || 0
-      };
-      const existsIdx = fav.card.findIndex(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) === id);
-      if (existsIdx >= 0) fav.card[existsIdx] = Object.assign({}, fav.card[existsIdx], minimal);
-      else fav.card.push(minimal);
-      Lampa.Noty.show('✅ Додано в ' + typeName);
+    if (!isInBucket(fav, uid, card.id)) {
+      fav[uid].push(card.id);
+      const idx = fav.card.findIndex(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) === card.id);
+      if (idx >= 0) fav.card[idx] = Object.assign({}, fav.card[idx], card);
+      else fav.card.push(card);
+      saveFavorite(fav);
+      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('✅ Додано в «' + DEFAULT_TYPE_NAME + '»');
     } else {
-      bucket.splice(idx, 1);
-      fav.card = fav.card.filter(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) !== id);
-      Lampa.Noty.show('⚠️ Видалено з ' + typeName);
+      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('⚠️ Вже у «' + DEFAULT_TYPE_NAME + '»');
     }
-
-    saveFavorite(fav);
-    return { name: typeName, uid, counter: bucket.length };
   }
 
-  // ===== Кнопка у картці =====
+  function removeFromDefault(card) {
+    const { fav, uid } = ensureDefaultType();
+    fav[uid] = Array.isArray(fav[uid]) ? fav[uid] : [];
+    fav.card = Array.isArray(fav.card) ? fav.card : [];
+
+    const i = fav[uid].indexOf(card.id);
+    if (i >= 0) {
+      fav[uid].splice(i, 1);
+      // прибираємо картку, якщо вона не використовується у жодній іншій кастомній категорії
+      const stillUsed = Object.keys(fav.customTypes)
+        .filter(name => name !== DEFAULT_TYPE_NAME && name !== 'card' && name !== 'any')
+        .some(name => {
+          const otherUid = fav.customTypes[name];
+          const arr = Array.isArray(fav[otherUid]) ? fav[otherUid] : [];
+          return arr.indexOf(card.id) >= 0;
+        });
+      if (!stillUsed) {
+        fav.card = fav.card.filter(c => (c && (c.id ?? c.ids ?? c.tmdb_id)) !== card.id);
+      }
+      saveFavorite(fav);
+      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('🗑️ Видалено з «' + DEFAULT_TYPE_NAME + '»');
+    } else {
+      Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('ℹ️ Не знайдено у «' + DEFAULT_TYPE_NAME + '»');
+    }
+  }
+
+  // ===== Інтеграція у картку: одна кнопка, одне натискання =====
   Lampa.Listener.follow('full', function (e) {
-    if (e.type !== 'complite') return;
-    const act = Lampa.Activity.active();
+    if (!e || e.type !== 'complite') return;
+
+    const act = Lampa.Activity && Lampa.Activity.active ? Lampa.Activity.active() : null;
     if (!act || !act.activity || typeof act.activity.render !== 'function') return;
 
     const render = act.activity.render();
     const bookBtn = render.find('.button--book');
     if (!bookBtn.length) return;
 
+    // Вимкнути попередні обробники, додати наш
     bookBtn.off('hover:enter.custom-bookmarks').on('hover:enter.custom-bookmarks', function () {
-      const fav = getFavorite();
-      // шукаємо дані картки у кількох місцях
-      const data = act?.data || e.data || act?.card || act?.activity?.data || {};
-      const id = data.id ?? data.ids ?? data.tmdb_id;
-      if (!id) {
-        Lampa.Noty.show('⚠️ Не вдалося отримати дані картки');
-        console.log('Card data debug:', data);
-        return;
-      }
-
-      const types = getTypesWithoutSystem(fav);
-      const items = [{ title: ' + Створити категорію', _create: true }].concat(
-        types.map(name => {
-          const list = fav[fav.customTypes[name]] || [];
-          const checked = list.indexOf(id) >= 0;
-          return { title: name, _name: name, checkbox: true, checked };
-        })
-      );
-
-      Lampa.Select.show({
-        title: 'Власні закладки',
-        items,
-        onSelect: function (choice) {
-          if (choice._create) {
-            Lampa.Input.edit({ title: 'Назва категорії', value: '', free: true, nosave: true }, function (newName) {
-              const created = createType(newName);
-              if (created) toggleCard(newName, data);
-            });
-          } else if (choice._name) {
-            toggleCard(choice._name, data);
-          }
-        },
-        onBack: function () {
-          Lampa.Controller.toggle('content');
+      try {
+        const card = extractCardData(e);
+        if (!card || !card.id) {
+          Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('⚠️ Не вдалося отримати дані картки');
+          return;
         }
-      });
+        const { fav, uid } = ensureDefaultType();
+        const inList = isInBucket(fav, uid, card.id);
+
+        if (inList) removeFromDefault(card);
+        else addToDefault(card);
+      } catch (_) {
+        Lampa.Noty && Lampa.Noty.show && Lampa.Noty.show('Помилка обробки закладки');
+      }
     });
   });
 
-  // ===== Категорії у меню «Закладки» =====
-  function renderCategoryRegister() {
-    const act = Lampa.Activity.active();
+  // ===== Відображення у «Закладках»: чіп + перехід у дефолтну категорію =====
+  function drawDefaultTypeChip() {
+    const act = Lampa.Activity && Lampa.Activity.active ? Lampa.Activity.active() : null;
     if (!act || act.name !== 'bookmarks' || !act.activity || typeof act.activity.render !== 'function') return;
 
     const container = act.activity.render();
-    const fav = getFavorite();
+    if (container.find('.custom-type-default').length) return;
 
-    // Кнопка створення
-    const reg = Lampa.Template.js('register').addClass('new-custom-type');
-    reg.find('.register__counter').html('<img src="./img/icons/add.svg"/>');
-    container.find('.register:first').before(reg);
+    const { fav, uid } = ensureDefaultType();
+    const counter = (Array.isArray(fav[uid]) ? fav[uid] : []).length;
 
-    reg.on('hover:enter', function () {
-      Lampa.Input.edit({ title: 'Назва категорії', value: '', free: true, nosave: true }, function (newName) {
-        const created = createType(newName);
-        if (created) drawTypeChip(created, container);
+    const chip = Lampa.Template.js('register')
+      .addClass('custom-type-default');
+    chip.find('.register__name').text(DEFAULT_TYPE_NAME);
+    chip.find('.register__counter').text(counter);
+
+    chip.on('hover:enter', function () {
+      Lampa.Activity.push({
+        url: '',
+        component: 'favorite',
+        title: DEFAULT_TYPE_NAME,
+        type: uid,
+        page: 1
       });
     });
 
-    // Вивести всі категорії
-    getTypesWithoutSystem(fav).forEach(function (name) {
-      const uid = fav.customTypes[name];
-      const counter = (fav[uid] || []).length;
-      drawTypeChip({ name, uid, counter }, container);
-    });
+    // Додати кнопку «створити» не будемо — safe mode тримає одну категорію
+    container.find('.register:first').after(chip);
   }
 
-  function drawTypeChip(info, container) {
-    const chip = Lampa.Template.js('register')
-      .addClass('custom-type')
-      .addClass('custom-type-' + info.uid);
-    chip.find('.register__name').text(info.name);
-    chip.find('.register__counter').text(info.counter || 0);
+  // Слухати відкриття «Закладок»
+  Lampa.Storage.listener && Lampa.Storage.listener.follow && Lampa.Storage.listener.follow('change', function (ev) {
+    if (ev.name !== 'activity') return;
+    drawDefaultTypeChip();
+  });
 
-    chip.on('hover:long', function () {
-      const items = [
-        { title: 'Перейменувати', action: 'rename' },
-        { title: 'Видалити', action: 'remove' }
-      ];
-      Lampa.Select.show({
-        title: 'Дії',
-        items,
-        onSelect: function (choice) {
-          if (choice.action === 'remove') {
-            if (removeType(info.name)) chip.remove();
-          } else if (choice.action === 'rename') {
-            Lampa.Input.edit({ title: 'Нове ім’я', value: info.name, free: true, nosave: true }, function (newName) {
-              if (renameType(info.name, newName)) chip.find('.register__name').text(newName);
-            });
-          }
-        }
-      });
-    });
+  // Запуск стилів (мінімально)
+  function start() {
+    try {
+      $('<style>').prop('type', 'text/css').html(
+        '.custom-type-default .register__name{font-weight:600}'
+      ).appendTo('head');
+    } catch (_) {}
+  }
 
-    chip.on('hover:enter',
+  if (window.appready) start();
+  else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') start(); });
+})();
