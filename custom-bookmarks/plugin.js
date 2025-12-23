@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    if (!window.Lampa) return;
+    if (!window.Lampa || !Lampa.Favorite) return;
 
     const STORAGE = 'custom_bookmarks_folders';
 
@@ -13,80 +13,70 @@
         Lampa.Storage.set(STORAGE, data);
     }
 
-    // Перехоплюємо стандартне меню "Вибране"
-    const originalSelect = Lampa.Select.show;
+    // зберігаємо оригінальний метод
+    const originalSelect = Lampa.Favorite.select;
 
-    Lampa.Select.show = function (params) {
+    Lampa.Favorite.select = function (card, callback) {
 
-        // Це саме те меню, яке відкривається з кнопки ⭐
-        if (params && params.items && params.items.length) {
+        let folders = load();
 
-            const card = Lampa.Activity.active()?.card;
-            if (!card || !card.id) {
-                return originalSelect.apply(this, arguments);
+        // викликаємо оригінальний select
+        originalSelect.call(this, card, function (selected) {
+
+            // якщо вибрано стандартне — передаємо далі
+            if (!selected || !selected.custom) {
+                if (callback) callback(selected);
+                return;
             }
 
-            let folders = load();
+            // створення папки
+            if (selected.create) {
+                Lampa.Input.edit({
+                    title: 'Назва папки',
+                    value: ''
+                }, function (name) {
+                    if (!name) return;
 
-            // Додаємо користувацькі папки
+                    folders.push({
+                        name: name,
+                        items: [card]
+                    });
+
+                    save(folders);
+                });
+                return;
+            }
+
+            // додавання в існуючу папку
+            let folder = folders[selected.index];
+            folder.items = folder.items || [];
+
+            if (!folder.items.find(i => i.id === card.id)) {
+                folder.items.push(card);
+                save(folders);
+            }
+        });
+
+        // доповнюємо UI (після ініціалізації)
+        setTimeout(() => {
+            let items = this.items || [];
+
+            // додаємо папки
             folders.forEach((folder, index) => {
-                params.items.push({
+                items.push({
                     title: folder.name,
                     custom: true,
                     index: index
                 });
             });
 
-            // Кнопка створення папки
-            params.items.push({
+            // кнопка створення
+            items.push({
                 title: '+ Створити папку',
                 create: true
             });
 
-            const originalOnSelect = params.onSelect;
-
-            params.onSelect = function (item) {
-
-                // Створення папки
-                if (item.create) {
-                    Lampa.Input.edit({
-                        title: 'Назва папки',
-                        value: ''
-                    }, function (name) {
-                        if (!name) return;
-
-                        folders.push({
-                            name: name,
-                            items: [card]
-                        });
-
-                        save(folders);
-                    });
-
-                    return;
-                }
-
-                // Додавання в кастомну папку
-                if (item.custom) {
-                    let folder = folders[item.index];
-                    folder.items = folder.items || [];
-
-                    if (!folder.items.find(i => i.id === card.id)) {
-                        folder.items.push(card);
-                        save(folders);
-                    }
-
-                    return;
-                }
-
-                // Стандартна логіка Lampa
-                if (originalOnSelect) {
-                    originalOnSelect(item);
-                }
-            };
-        }
-
-        return originalSelect.apply(this, arguments);
+        }, 0);
     };
 
 })();
