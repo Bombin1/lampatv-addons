@@ -3,88 +3,51 @@
 
     if (!window.Lampa) return;
 
-    const STORAGE_KEY = 'my_bookmarks_list';
+    console.log('[MyBookmarks] loaded');
 
-    function getBookmarks() {
-        return Lampa.Storage.get(STORAGE_KEY, []);
-    }
-
-    function saveBookmarks(list) {
-        Lampa.Storage.set(STORAGE_KEY, list);
-    }
-
-    function addTestBookmark() {
-        let list = getBookmarks();
-
-        list.push({
-            title: 'Тестова закладка ' + (list.length + 1),
-            time: new Date().toLocaleString()
-        });
-
-        saveBookmarks(list);
-        Lampa.Noty.show('Закладку додано');
-    }
-
-    function showBookmarks() {
-        let list = getBookmarks();
-
-        if (!list.length) {
-            Lampa.Noty.show('Закладок немає');
+    /**
+     * Додавання у стандартне Вибране Lampa
+     */
+    function addToFavorite(card) {
+        if (!card || !card.id) {
+            Lampa.Noty.show('Неможливо додати');
             return;
         }
 
-        let text = list
-            .map((item, i) => `${i + 1}. ${item.title} (${item.time})`)
-            .join('\n');
+        // перевірка, чи вже є у вибраному
+        if (Lampa.Favorite.check(card)) {
+            Lampa.Noty.show('Вже у вибраному');
+            return;
+        }
 
-        Lampa.Noty.show(text);
+        Lampa.Favorite.add(card);
+        Lampa.Noty.show('Додано у вибране');
     }
 
-    function clearBookmarks() {
-        saveBookmarks([]);
-        Lampa.Noty.show('Закладки очищено');
-    }
+    /**
+     * Додаємо кнопку у картці фільму / серіалу
+     */
+    Lampa.Listener.follow('full', function (e) {
+        if (e.type !== 'open') return;
 
-    // Додаємо компонент у налаштування
-    Lampa.SettingsApi.addComponent({
-        name: 'my_bookmarks',
-        title: 'My Bookmarks'
+        let render = e.object.activity.render();
+        if (!render || !render.length) return;
+
+        // щоб не дублювати кнопку
+        if (render.find('.my-bookmarks-btn').length) return;
+
+        let button = $('<div class="full__button selector my-bookmarks-btn">У вибране</div>');
+
+        button.on('click', function () {
+            addToFavorite(e.object.card);
+        });
+
+        render.find('.full__buttons').append(button);
     });
 
-    // Кнопка: додати
-    Lampa.SettingsApi.addParam({
-        component: 'my_bookmarks',
-        param: {
-            name: 'add',
-            type: 'button',
-            text: 'Додати тестову закладку',
-            onSelect: addTestBookmark
-        }
-    });
-
-    // Кнопка: показати
-    Lampa.SettingsApi.addParam({
-        component: 'my_bookmarks',
-        param: {
-            name: 'show',
-            type: 'button',
-            text: 'Показати закладки',
-            onSelect: showBookmarks
-        }
-    });
-
-    // Кнопка: очистити
-    Lampa.SettingsApi.addParam({
-        component: 'my_bookmarks',
-        param: {
-            name: 'clear',
-            type: 'button',
-            text: 'Очистити закладки',
-            onSelect: clearBookmarks
-        }
-    });
-
-    console.log('[MyBookmarks] plugin loaded');
-    Lampa.Noty.show('MyBookmarks: плагін завантажено');
+    /**
+     * Інформаційне повідомлення
+     */
+    Lampa.Noty.show('MyBookmarks активний');
 
 })();
