@@ -1,208 +1,144 @@
 (function () {
-  'use strict';
+    'use strict';
 
-  const STORAGE_KEY = 'favorite';
+    function CustomBookmarksPlugin() {
+        var items = [];
+        
+        // Завантаження даних
+        var load = function() {
+            try {
+                items = JSON.parse(Lampa.Storage.get('custom_bookmarks_folders', '[]'));
+            } catch(e) { 
+                items = []; 
+            }
+        };
 
-  // ===== Утиліти =====
-  function getFavorite() {
-    let fav = Lampa.Storage.get(STORAGE_KEY, {});
-    if (typeof fav === 'string') {
-      try { fav = JSON.parse(fav); } catch (_) { fav = {}; }
+        var save = function() {
+            Lampa.Storage.set('custom_bookmarks_folders', JSON.stringify(items));
+        };
+
+        load();
+
+        // 1. Додавання кнопки в картку фільму (як у прикладі)
+        Lampa.Listener.follow('full', function (e) {
+            if (e.type === 'complite') {
+                var render = e.object.render();
+                var container = render.find('.full-start__buttons');
+                
+                if (container.length && !render.find('.button--custom-bookmarks').length) {
+                    var btn = $('<div class="full-start__button selector button--custom-bookmarks"><svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg" style="fill: currentColor; margin-right: 10px; vertical-align: middle;"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><span>Папки</span></div>');
+                    
+                    btn.on('click', function () {
+                        var menu = [{ title: ' + Створити папку', action: 'create' }];
+                        items.forEach(function(cat, i) { 
+                            menu.push({ title: cat.name, action: 'add', index: i }); 
+                        });
+
+                        Lampa.Select.show({
+                            title: 'Додати в папку',
+                            items: menu,
+                            onSelect: function (a) {
+                                if (a.action === 'create') {
+                                    Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                                        if (name) {
+                                            items.push({ name: name, list: [e.data] });
+                                            save();
+                                            Lampa.Noty.show('Папку створено');
+                                        }
+                                    });
+                                } else {
+                                    var category = items[a.index];
+                                    if (!category.list) category.list = [];
+                                    if (!category.list.find(function(m){ return m.id == e.data.id })) {
+                                        category.list.push(e.data);
+                                        save();
+                                        Lampa.Noty.show('Додано в ' + category.name);
+                                    } else {
+                                        Lampa.Noty.show('Вже є в цій папці');
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    container.append(btn);
+                }
+            }
+        });
+
+        // 2. Створення окремого компонента для відображення (як у my_bookmarks)
+        Lampa.Component.add('my_folders', function (object) {
+            var comp = this;
+            var scroll = new Lampa.Scroll({mask: true, over: true});
+            var last_index = 0;
+
+            this.create = function () {
+                var gui = $('<div class="bookmarks-folders"></div>');
+                load();
+
+                if (items.length === 0) {
+                    gui.append('<div class="empty" style="text-align:center; padding: 100px;">Папки порожні. Створіть їх у картці фільму.</div>');
+                } else {
+                    // Створення вкладок (tabs) якщо папок багато
+                    items.forEach(function(cat, index) {
+                        var row = $('<div class="category-list"><div class="category-title" style="padding: 20px 40px; font-size: 1.8em; color: #fff;">' + cat.name + '</div><div class="category-items" style="display: flex; flex-wrap: wrap; padding: 0 40px;"></div></div>');
+                        
+                        cat.list.forEach(function(movie) {
+                            var card = Lampa.Template.get('card', movie);
+                            card.addClass('selector');
+                            card.on('click', function() {
+                                Lampa.Activity.push({
+                                    url: movie.url, title: movie.title || movie.name, component: 'full', id: movie.id, method: movie.name ? 'tv' : 'movie', card: movie
+                                });
+                            });
+                            // Додаємо контекстне меню для видалення
+                            card.on('hover:long', function() {
+                                Lampa.Select.show({
+                                    title: 'Керування',
+                                    items: [{title: 'Видалити з папки', action: 'delete'}],
+                                    onSelect: function() {
+                                        cat.list = cat.list.filter(function(m) { return m.id !== movie.id });
+                                        save();
+                                        Lampa.Activity.replace(); // Оновити екран
+                                    }
+                                });
+                            });
+                            row.find('.category-items').append(card);
+                        });
+                        gui.append(row);
+                    });
+                }
+                return scroll.render().append(gui);
+            };
+
+            this.start = function () {
+                Lampa.Controller.add('content', {
+                    toggle: function () {
+                        Lampa.Controller.collectionSet(comp.render());
+                        Lampa.Controller.collectionFocus(false, comp.render());
+                    }
+                });
+                Lampa.Controller.toggle('content');
+            };
+
+            this.render = function () { return this.create(); };
+            this.pause = function () {};
+            this.stop = function () {};
+        });
+
+        // 3. Інтеграція в головне меню
+        var addMenu = function() {
+            if ($('.menu .menu__list').length && !$('.menu__item--my-folders').length) {
+                var menu_item = $('<li class="menu__item selector menu__item--my-folders"><div class="menu__ico"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="white"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 10H6v-2h12v2zm0-4H6V10h12v2z"/></svg></div><div class="menu__text">Мої папки</div></li>');
+                menu_item.on('hover:enter', function () {
+                    Lampa.Activity.push({ title: 'Мої папки', component: 'my_folders', page: 1 });
+                });
+                $('.menu .menu__list').append(menu_item);
+            }
+        };
+
+        setInterval(addMenu, 2000);
     }
-    if (!fav || typeof fav !== 'object') fav = {};
-    fav.card = Array.isArray(fav.card) ? fav.card : [];
-    fav.customTypes = fav.customTypes || {};
-    return fav;
-  }
 
-  function saveFavorite(obj) {
-    Lampa.Storage.set(STORAGE_KEY, obj);
-    if (Lampa.Favorite && typeof Lampa.Favorite.init === 'function') Lampa.Favorite.init();
-  }
-
-  function createType(name) {
-    const fav = getFavorite();
-    if (!name || name === 'card' || name === 'any') {
-      Lampa.Noty.show('⚠️ Некоректне ім’я');
-      return null;
-    }
-    if (fav.customTypes[name]) {
-      Lampa.Noty.show('⚠️ Категорія вже існує');
-      return null;
-    }
-    const uid = Lampa.Utils.uid(8).toLowerCase();
-    fav.customTypes[name] = uid;
-    fav[uid] = [];
-    saveFavorite(fav);
-    return { name, uid, counter: 0 };
-  }
-
-  function renameType(oldName, newName) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[oldName];
-    if (!uid) return false;
-    if (fav.customTypes[newName]) return false;
-    fav.customTypes[newName] = uid;
-    delete fav.customTypes[oldName];
-    saveFavorite(fav);
-    return true;
-  }
-
-  function removeType(name) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[name];
-    if (!uid) return false;
-    delete fav.customTypes[name];
-    delete fav[uid];
-    saveFavorite(fav);
-    return true;
-  }
-
-  function toggleCard(typeName, cardData) {
-    const fav = getFavorite();
-    const uid = fav.customTypes[typeName];
-    if (!uid) { Lampa.Noty.show('⚠️ Категорія не знайдена'); return null; }
-
-    const id = cardData && (cardData.id ?? cardData.tmdb_id);
-    if (!id) { Lampa.Noty.show('⚠️ Некоректні дані картки'); return null; }
-
-    fav[uid] = Array.isArray(fav[uid]) ? fav[uid] : [];
-    fav.card = Array.isArray(fav.card) ? fav.card : [];
-
-    const bucket = fav[uid];
-    const idx = bucket.indexOf(id);
-
-    if (idx === -1) {
-      bucket.push(id);
-      const existsIdx = fav.card.findIndex(c => (c && (c.id ?? c.tmdb_id)) === id);
-      if (existsIdx >= 0) fav.card[existsIdx] = cardData;
-      else fav.card.push(cardData);
-      saveFavorite(fav);
-      Lampa.Noty.show('✅ Додано в ' + typeName);
-    } else {
-      bucket.splice(idx, 1);
-      fav.card = fav.card.filter(c => (c && (c.id ?? c.tmdb_id)) !== id);
-      saveFavorite(fav);
-      Lampa.Noty.show('⚠️ Видалено з ' + typeName);
-    }
-    return { name: typeName, uid, counter: bucket.length };
-  }
-
-  // ===== Кнопка у картці =====
-  Lampa.Listener.follow('full', function (e) {
-    if (e.type !== 'complite') return;
-    const act = Lampa.Activity.active();
-    if (!act || !act.activity || typeof act.activity.render !== 'function') return;
-
-    const render = act.activity.render();
-    const bookBtn = render.find('.button--book');
-    if (!bookBtn.length) return;
-
-    bookBtn.off('hover:enter.custom-bookmarks').on('hover:enter.custom-bookmarks', function () {
-      const fav = getFavorite();
-      const types = Object.keys(fav.customTypes || {}).filter(x => x !== 'card' && x !== 'any');
-      const data = act.card || act.data || e.data || {};
-
-      if (!data || !data.id) {
-        Lampa.Noty.show('⚠️ Не вдалося отримати дані картки');
-        console.log('Card data debug:', data);
-        return;
-      }
-
-      const items = [{ title: ' + Створити категорію', _create: true }].concat(
-        types.map(name => {
-          const list = fav[fav.customTypes[name]] || [];
-          const checked = list.indexOf(data.id) >= 0;
-          return { title: name, _name: name, checkbox: true, checked };
-        })
-      );
-
-      Lampa.Select.show({
-        title: 'Власні закладки',
-        items,
-        onSelect: function (choice) {
-          if (choice._create) {
-            Lampa.Input.edit({ title: 'Назва категорії', value: '', free: true, nosave: true }, function (newName) {
-              const created = createType(newName);
-              if (created) toggleCard(newName, data);
-            });
-          } else if (choice._name) {
-            toggleCard(choice._name, data);
-          }
-        },
-        onBack: function () {
-          Lampa.Controller.toggle('content');
-        }
-      });
-    });
-  });
-
-  // ===== Категорії у меню «Закладки» =====
-  function renderCategoryRegister() {
-    const act = Lampa.Activity.active();
-    if (!act || act.name !== 'bookmarks' || !act.activity || typeof act.activity.render !== 'function') return;
-
-    const container = act.activity.render();
-    const fav = getFavorite();
-
-    // Кнопка створення
-    const reg = Lampa.Template.js('register').addClass('new-custom-type');
-    reg.find('.register__counter').html('<img src="./img/icons/add.svg"/>');
-    container.find('.register:first').before(reg);
-
-    reg.on('hover:enter', function () {
-      Lampa.Input.edit({ title: 'Назва категорії', value: '', free: true, nosave: true }, function (newName) {
-        const created = createType(newName);
-        if (created) drawTypeChip(created, container);
-      });
-    });
-
-    // Вивести всі категорії
-    Object.keys(fav.customTypes || {}).filter(x => x !== 'card' && x !== 'any').forEach(function (name) {
-      const uid = fav.customTypes[name];
-      const counter = (fav[uid] || []).length;
-      drawTypeChip({ name, uid, counter }, container);
-    });
-  }
-
-  function drawTypeChip(info, container) {
-    const chip = Lampa.Template.js('register')
-      .addClass('custom-type')
-      .addClass('custom-type-' + info.uid);
-    chip.find('.register__name').text(info.name);
-    chip.find('.register__counter').text(info.counter || 0);
-
-    chip.on('hover:long', function () {
-      const items = [
-        { title: 'Перейменувати', action: 'rename' },
-        { title: 'Видалити', action: 'remove' }
-      ];
-      Lampa.Select.show({
-        title: 'Дії',
-        items,
-        onSelect: function (choice) {
-          if (choice.action === 'remove') {
-            if (removeType(info.name)) chip.remove();
-          } else if (choice.action === 'rename') {
-            Lampa.Input.edit({ title: 'Нове ім’я', value: info.name, free: true, nosave: true }, function (newName) {
-              if (renameType(info.name, newName)) chip.find('.register__name').text(newName);
-            });
-          }
-        }
-      });
-    });
-
-    chip.on('hover:enter', function () {
-      Lampa.Activity.push({
-        url: '',
-        component: 'favorite',
-        title: info.name,
-        type: info.uid,
-        page: 1
-      });
-    });
-
-    container.find('.register:first').after(chip);
-  }
-
-  Lampa.Storage.listener && Lampa.Storage.listener.follow && Lampa.Storage.listener.follow('change', function (ev
+    if (window.appready) CustomBookmarksPlugin();
+    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') CustomBookmarksPlugin(); });
+})();
