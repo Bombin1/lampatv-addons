@@ -3,92 +3,92 @@
 
     if (!window.Lampa) return;
 
-    const CATEGORY_PREFIX = 'user_list_';
+    const PREFIX = 'user_list_';
 
-    /* ================================
-       ДОПОМІЖНІ
-    ================================ */
-
-    function getUserLists() {
-        return Lampa.Bookmarks.categories.filter(c =>
-            c.id.startsWith(CATEGORY_PREFIX)
-        );
+    function waitBookmarks(cb) {
+        if (Lampa.Bookmarks && Lampa.Bookmarks.categories) cb();
+        else setTimeout(() => waitBookmarks(cb), 300);
     }
 
-    function createUserList(title) {
-        const id = CATEGORY_PREFIX + Date.now();
+    waitBookmarks(function () {
 
-        Lampa.Bookmarks.categories.push({
-            id: id,
-            title: title,
-            source: 'plugin',
-            type: 'custom'
-        });
+        function getLists() {
+            return Lampa.Bookmarks.categories.filter(c =>
+                c.id && c.id.indexOf(PREFIX) === 0
+            );
+        }
 
-        Lampa.Bookmarks.save();
-    }
+        function createList(title) {
+            const id = PREFIX + Date.now();
 
-    function addCardToList(card, category_id) {
-        const bookmarkCard = Lampa.Bookmarks.card(card);
-        Lampa.Bookmarks.add(bookmarkCard, category_id);
-    }
+            Lampa.Bookmarks.categories.push({
+                id: id,
+                title: title,
+                source: 'plugin',
+                type: 'custom'
+            });
 
-    /* ================================
-       МЕНЮ "МОЇ"
-    ================================ */
+            Lampa.Bookmarks.save();
+        }
 
-    Lampa.Listener.follow('menu', function (e) {
-        if (e.type !== 'build') return;
-        if (e.name !== 'my') return;
+        function addToList(card, list_id) {
+            const data = Lampa.Bookmarks.card(card);
+            Lampa.Bookmarks.add(data, list_id);
+        }
 
-        e.items.unshift({
-            title: '+ Створити список',
-            type: 'action',
-            action: function () {
-                Lampa.Input.show({
-                    title: 'Назва списку',
-                    value: '',
-                    onSubmit: function (value) {
-                        if (!value) return;
-                        createUserList(value);
-                        Lampa.Activity.replace();
-                    }
-                });
-            }
-        });
-    });
+        /* ===== МЕНЮ "МОЇ" ===== */
 
-    /* ================================
-       КАРТКА ФІЛЬМУ
-    ================================ */
+        Lampa.Listener.follow('menu', function (e) {
+            if (e.type !== 'build') return;
+            if (e.name !== 'my') return;
 
-    Lampa.Listener.follow('full', function (e) {
-        if (e.type !== 'build') return;
-
-        e.buttons.unshift({
-            title: 'В список',
-            svg: '<svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>',
-            action: function () {
-                const lists = getUserLists();
-
-                if (!lists.length) {
-                    Lampa.Noty.show('Спочатку створи список');
-                    return;
+            e.items.unshift({
+                title: '+ Створити список',
+                type: 'action',
+                action: function () {
+                    Lampa.Input.show({
+                        title: 'Назва списку',
+                        value: '',
+                        onSubmit: function (v) {
+                            if (!v) return;
+                            createList(v);
+                            Lampa.Activity.replace();
+                        }
+                    });
                 }
-
-                Lampa.Select.show({
-                    title: 'Вибери список',
-                    items: lists.map(l => ({
-                        title: l.title,
-                        id: l.id
-                    })),
-                    onSelect: function (a) {
-                        addCardToList(e.data, a.id);
-                        Lampa.Noty.show('Додано в "' + a.title + '"');
-                    }
-                });
-            }
+            });
         });
+
+        /* ===== КАРТКА ФІЛЬМУ ===== */
+
+        Lampa.Listener.follow('full', function (e) {
+            if (e.type !== 'build') return;
+
+            e.buttons.unshift({
+                title: 'В список',
+                action: function () {
+                    const lists = getLists();
+
+                    if (!lists.length) {
+                        Lampa.Noty.show('Створи список');
+                        return;
+                    }
+
+                    Lampa.Select.show({
+                        title: 'Вибери список',
+                        items: lists.map(l => ({
+                            title: l.title,
+                            id: l.id
+                        })),
+                        onSelect: function (a) {
+                            addToList(e.data, a.id);
+                            Lampa.Noty.show('Додано');
+                        }
+                    });
+                }
+            });
+        });
+
     });
 
 })();
