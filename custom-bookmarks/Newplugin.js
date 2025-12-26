@@ -20,14 +20,13 @@
         }
     }
 
-    // 2. СТИЛІ (ВАШ ОРИГІНАЛ)
+    // 2. СТИЛІ (Ваш оригінал плиток)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgb(19, 22, 22) !important; \
-                opacity: 1 !important; \
                 width: 118px; height: 66px; \
                 border-radius: 8px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
@@ -38,7 +37,6 @@
                 background-color: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
-                opacity: 1 !important; \
             } \
             .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
@@ -109,7 +107,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ВИПРАВЛЕНА ЛОГІКА КВАДРАТІВ ТА КОЛЬОРУ
+    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ КВАДРАТІВ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -132,11 +130,12 @@
                             title: f.name, 
                             is_custom: true, 
                             f_idx: i,
-                            // checked: true -> квадрат з галочкою
-                            // checked: false -> порожній квадрат
+                            // Використовуємо системний шаблон чекбокса
+                            template: 'is_checked',
+                            // Стан чекбокса: true (квадрат з галкою), false (порожній квадрат)
                             checked: exists,
-                            // Колір: білий якщо в списку, сірий (opacity) якщо ні
-                            style: exists ? '' : 'opacity: 0.5;'
+                            // Зміна кольору тексту: яскравий якщо в списку, тьмяний якщо ні
+                            style: exists ? '' : 'opacity: 0.5'
                         });
                     });
 
@@ -149,11 +148,15 @@
                             var target = fUpdate[item.f_idx];
                             var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
-                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
-                            else target.list.push(Object.assign({}, movie));
+                            if (movieIdx > -1) {
+                                target.list.splice(movieIdx, 1);
+                            } else {
+                                target.list.push(Object.assign({}, movie));
+                            }
                             
                             saveFolders(fUpdate);
                             
+                            // Перевідкриваємо меню для миттєвого оновлення візуалу
                             Lampa.Select.close();
                             setTimeout(function(){
                                 Lampa.Select.show(params);
@@ -168,7 +171,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ
+    // 5. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
