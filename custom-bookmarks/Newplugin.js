@@ -5,6 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
+    // 1. ФУНКЦІЇ РОБОТИ З ДАНИМИ ТА СИНХРОНІЗАЦІЄЮ
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -14,15 +15,35 @@
 
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
+        syncCloud(folders); // Відправка в хмару при кожній зміні
     }
 
-    // СТИЛІ: Суцільний колір rgb(19, 22, 22) без прозорості
+    // Синхронізація з хмарою Lampa (CUB)
+    function syncCloud(folders) {
+        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
+            window.Lampa.Cloud.set(STORAGE_KEY, folders);
+        }
+    }
+
+    // Завантаження з хмари при старті
+    function loadFromCloud(callback) {
+        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
+            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
+                if (data && Array.isArray(data)) {
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    if (callback) callback();
+                }
+            });
+        }
+    }
+
+    // 2. СТИЛІ (Ваші налаштування: 118x66, rgb(19, 22, 22), непрозорі)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgb(19, 22, 22) !important; /* ПОВНІСТЮ НЕПРОЗОРИЙ */ \
+                background-color: rgb(19, 22, 22) !important; \
                 opacity: 1 !important; \
                 width: 118px; height: 66px; \
                 border-radius: 8px; \
@@ -34,7 +55,6 @@
                 background-color: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
-                opacity: 1 !important; \
             } \
             .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
@@ -44,7 +64,7 @@
         </style>');
     }
 
-    // 1. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
     Lampa.Component.add('custom_folder_component', function (object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -104,9 +124,12 @@
         };
     });
 
-    // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
+    // 4. ІНТЕГРАЦІЯ ТА СТАРТ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
+            // Підтягуємо дані з хмари при запуску
+            loadFromCloud();
+
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
@@ -157,7 +180,7 @@
         }
     });
 
-    // 3. МЕНЮ БЕЗ ДУБЛІКАТІВ ТА З ГАЛОЧКАМИ
+    // 5. МЕНЮ З ГАЛОЧКАМИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
