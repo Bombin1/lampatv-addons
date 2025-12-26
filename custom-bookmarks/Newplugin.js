@@ -20,7 +20,17 @@
         }
     }
 
-    // 2. СТИЛІ (ВАШ ОРИГІНАЛ + ФІКС ДЛЯ ПРАВОГО КВАДРАТИКА)
+    function loadFromCloud() {
+        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
+            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
+                if (data && Array.isArray(data)) {
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                }
+            });
+        }
+    }
+
+    // 2. СТИЛІ ПЛИТОК ТА МЕНЮ
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -43,13 +53,10 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            /* Нові стилі для меню */ \
-            .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
-            .custom-folder-icon { font-size: 1.2em; opacity: 0.8; } \
         </style>');
     }
 
-    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ (БЕЗ ЗМІН)
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ВНУТРІШНОСТІ ПАПКИ
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -110,7 +117,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - БЕЗПЕЧНА РЕАЛІЗАЦІЯ БЕЗ ШАБЛОНІВ
+    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ КВАДРАТІВ ТА ЛОГІКИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -129,17 +136,14 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
-                        var textOpacity = exists ? '1' : '0.5';
-                        
                         customItems.push({ 
-                            // Використовуємо html замість title для повної кастомізації
-                            html: '<div class="custom-folder-item" style="opacity: '+textOpacity+'"> \
-                                     <span>'+f.name+'</span> \
-                                     <i class="'+iconClass+' custom-folder-icon"></i> \
-                                   </div>',
+                            title: f.name,
+                            // Використовуємо іконки через властивість icon та шаблон icon
+                            icon: exists ? '<i class="icon--CheckBox"></i>' : '<i class="icon--CropSquare"></i>',
+                            template: 'icon',
                             is_custom: true, 
-                            f_idx: i
+                            f_idx: i,
+                            style: exists ? '' : 'opacity: 0.5'
                         });
                     });
 
@@ -150,15 +154,37 @@
                         if (item.is_custom) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
-                            var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
+                            
+                            var movieIdx = -1;
+                            for(var j=0; j < target.list.length; j++) {
+                                if(target.list[j].id == movie.id) {
+                                    movieIdx = j;
+                                    break;
+                                }
+                            }
 
-                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
-                            else target.list.push(Object.assign({}, movie));
+                            if (movieIdx > -1) {
+                                target.list.splice(movieIdx, 1);
+                                Lampa.Noty.show('Видалено з ' + target.name);
+                            } else {
+                                target.list.push(JSON.parse(JSON.stringify(movie)));
+                                Lampa.Noty.show('Додано в ' + target.name);
+                            }
                             
                             saveFolders(fUpdate);
                             Lampa.Select.close();
-                            // Перевідкриваємо, щоб побачити зміни
-                            setTimeout(function(){ Lampa.Select.show(params); }, 10);
+                            
+                            // Перевідкриваємо меню для візуального оновлення
+                            setTimeout(function(){
+                                params.items.forEach(function(p_item) {
+                                    if(p_item.is_custom) {
+                                        var still_exists = fUpdate[p_item.f_idx].list.some(function(m) { return m.id == movie.id; });
+                                        p_item.icon = still_exists ? '<i class="icon--CheckBox"></i>' : '<i class="icon--CropSquare"></i>';
+                                        p_item.style = still_exists ? '' : 'opacity: 0.5';
+                                    }
+                                });
+                                Lampa.Select.show(params);
+                            }, 10);
                         } else if (originalOnSelect) {
                             originalOnSelect(item);
                         }
@@ -169,9 +195,10 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ (БЕЗ ЗМІН)
+    // 5. ІНТЕГРАЦІЯ В РОЗДІЛ ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
+            loadFromCloud();
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
