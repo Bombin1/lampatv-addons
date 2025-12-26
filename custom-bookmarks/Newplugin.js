@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Тільки для плиток у Закладках)
+    // 2. СТИЛІ (Твої оригінальні стилі для іконок)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,10 +39,13 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
+            /* Стилі для іконок у меню */ \
+            .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
+            .custom-folder-icon { font-size: 1.2em; opacity: 0.8; } \
         </style>');
     }
 
-    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ (БЕЗ ЗМІН)
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -97,7 +100,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ТЕКСТОВА ВЕРСІЯ (НАЙБІЛЬШ СУМІСНА)
+    // 4. МЕНЮ ВИБОРУ (Метод малювання з твого коду + робоча логіка)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -115,13 +118,15 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        
-                        // Використовуємо прості символи: [ ] та [X]
-                        // Додаємо багато нерозривних пробілів для імітації вирівнювання по правому краю
-                        var mark = exists ? '[X]' : '[  ]';
+                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
+                        var textOpacity = exists ? '1' : '0.5';
                         
                         customItems.push({ 
-                            title: f.name + '                                          ' + mark,
+                            // Вставляємо HTML метод малювання іконок
+                            html: '<div class="custom-folder-item" style="opacity: '+textOpacity+'"> \
+                                     <span>'+f.name+'</span> \
+                                     <i class="'+iconClass+' custom-folder-icon"></i> \
+                                   </div>',
                             is_custom_item: true, 
                             f_idx: i
                         });
@@ -134,20 +139,26 @@
                         if (item.is_custom_item) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
+                            
+                            // Надійний пошук та видалення/додавання
                             var movieIdx = -1;
-                            for(var j=0; j < target.list.length; j++) {
-                                if(target.list[j].id == movie.id) { movieIdx = j; break; }
+                            for(var j=0; j < target.list.length; j++){
+                                if(target.list[j].id == movie.id){
+                                    movieIdx = j; break;
+                                }
                             }
 
                             if (movieIdx > -1) {
                                 target.list.splice(movieIdx, 1);
                             } else {
+                                // Клонуємо об'єкт фільму для стабільності
                                 target.list.push(JSON.parse(JSON.stringify(movie)));
                             }
                             
                             saveFolders(fUpdate);
                             Lampa.Select.close();
                             
+                            // Оновлюємо меню без сповіщень
                             setTimeout(function(){
                                 Lampa.Select.show(params);
                             }, 10);
