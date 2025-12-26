@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Оновлені стилі (вигляд як стокові папки)
+    // Стилі папок (дизайн Lampa)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
@@ -39,23 +39,33 @@
         </style>');
     }
 
-    // ПЕРЕХОПЛЕННЯ КОМПОНЕНТА CATEGORY_FULL (це те, що ми робили не так)
+    // 1. ПЕРЕХОПЛЕННЯ ТА ПРАВИЛЬНИЙ РЕНДЕР
     var originalCategoryFull = Lampa.Component.get('category_full');
     Lampa.Component.add('category_full', function (object) {
-        var comp = new originalCategoryFull(object);
-        
-        // Якщо це наша папка, ми підміняємо метод завантаження даних
         if (object.is_custom_folder) {
+            // Створюємо порожній об'єкт, щоб компонент не ліз у мережу
+            object.url = ''; 
+            var comp = new originalCategoryFull(object);
+            
+            // Підміняємо рендер: замість завантаження просто відмальовуємо items
             comp.render = function () {
-                // Викликаємо оригінальний рендер, але з нашими даними
-                comp.build(object.items);
+                var items = object.items || [];
+                // Чекаємо мікросекунду, щоб компонент ініціалізувався
+                setTimeout(function() {
+                    comp.build({
+                        results: items,
+                        total_pages: 1,
+                        page: 1
+                    });
+                }, 10);
                 return comp.content();
             };
+            return comp;
         }
-        return comp;
+        return new originalCategoryFull(object);
     }, true);
 
-    // 1. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
+    // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -88,7 +98,6 @@
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // ПРАВИЛЬНИЙ ЗАПУСК: Передаємо прапорець і список через items
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
@@ -121,7 +130,7 @@
         }
     });
 
-    // 2. ДОДАВАННЯ В ПАПКИ (НОРМАЛІЗАЦІЯ)
+    // 3. ДОДАВАННЯ (НОРМАЛІЗАЦІЯ ДАНИХ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { 
@@ -145,19 +154,11 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        var cleanCard = {
-                            id: movie.id,
-                            title: movie.title || movie.name,
-                            original_title: movie.original_title || movie.original_name,
-                            release_date: movie.release_date || movie.first_air_date,
-                            poster_path: movie.poster_path || movie.poster,
-                            img: movie.img || movie.poster_path || movie.poster,
-                            type: movie.type || (movie.name ? 'tv' : 'movie'),
-                            vote_average: movie.vote_average
-                        };
-                        
-                        if (!target.list.some(function(m) { return m.id == cleanCard.id; })) {
-                            target.list.push(cleanCard);
+                        // Перевірка на дублікати та збереження
+                        if (!target.list.some(function(m) { return m.id == movie.id; })) {
+                            // Зберігаємо тільки чистий об'єкт даних
+                            var movieToSave = JSON.parse(JSON.stringify(movie));
+                            target.list.push(movieToSave);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
