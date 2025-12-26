@@ -5,7 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // --- 1. РОБОТА З ДАНИМИ ТА ХМАРОЮ ---
+    // --- 1. РОБОТА З ДАНИМИ ---
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -21,7 +21,7 @@
         }
     }
 
-    // --- 2. СТИЛІ (ПРОЗОРІСТЬ 30%) ---
+    // --- 2. СТИЛІ ---
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 10px; width: 100%; } \
@@ -45,7 +45,7 @@
         </style>');
     }
 
-    // --- 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ВМІСТУ ПАПКИ ---
+    // --- 3. КОМПОНЕНТ ВМІСТУ ПАПКИ ---
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -85,7 +85,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- 4. ГОЛОВНА ЛОГІКА ТА ВИПРАВЛЕННЯ ПОМИЛКИ (TypeError) ---
+    // --- 4. ГОЛОВНА ЛОГІКА ТА БЕЗПЕЧНА НАВІГАЦІЯ ---
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -93,12 +93,11 @@
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
-                var last_folder_focus;
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
                     var folders = getFolders();
-                    var container = view.find('.category-full, .bookmarks-list, .scroll__content').first();
+                    var container = view.find('.category-full, .bookmarks-list, .scroll__content, .bookmarks__content').first();
                     
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
@@ -145,44 +144,13 @@
 
                         container.prepend(wrapper);
 
-                        // РЕЄСТРАЦІЯ КОНТРОЛЕРА ДЛЯ ПАПОК
-                        Lampa.Controller.add('bookmarks_folders', {
-                            toggle: function () {
-                                Lampa.Controller.collectionSet(wrapper);
-                                Lampa.Controller.collectionFocus(last_folder_focus || wrapper.find('.selector').first()[0]);
-                            },
-                            down: function () {
-                                Lampa.Controller.toggle('content');
-                            },
-                            up: function () {
-                                Lampa.Controller.toggle('head');
-                            },
-                            left: function () {
-                                Lampa.Controller.toggle('menu');
-                            },
-                            back: function () {
-                                Lampa.Activity.backward();
-                            }
-                        });
-
-                        // ВИПРАВЛЕНО: Використовуємо .enabled() замість .get()
+                        // БЕЗПЕЧНИЙ ФІКС ПУЛЬТА:
+                        // Замість модифікації об'єктів просто кажемо Lampa враховувати нові елементи
                         var originalStart = comp.start;
                         comp.start = function() {
                             originalStart.call(comp);
-                            
-                            var ctrl = Lampa.Controller.enabled();
-                            if (ctrl) {
-                                var old_up = ctrl.up;
-                                ctrl.up = function() {
-                                    // Перевіряємо чи ми на самому верху списку фільмів
-                                    var focused = wrapper.find('.focus');
-                                    if (focused.length === 0) {
-                                        Lampa.Controller.toggle('bookmarks_folders');
-                                    } else if (old_up) {
-                                        old_up.call(ctrl);
-                                    }
-                                };
-                            }
+                            // Це змушує стандартний контролер побачити наші папки як частину списку
+                            Lampa.Controller.collectionSet(view);
                         };
                     }
                     return view;
