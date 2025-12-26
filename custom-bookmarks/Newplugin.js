@@ -20,17 +20,7 @@
         }
     }
 
-    function loadFromCloud() {
-        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
-            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
-                if (data && Array.isArray(data)) {
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                }
-            });
-        }
-    }
-
-    // 2. СТИЛІ ПЛИТОК ТА МЕНЮ
+    // 2. СТИЛІ (Для квадратиків у меню)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -43,20 +33,22 @@
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
-            .folder-tile.focus { \
-                background-color: #fff !important; \
-                color: #000 !important; \
-                transform: scale(1.05); \
-            } \
+            .folder-tile.focus { background-color: #fff !important; color: #000 !important; transform: scale(1.05); } \
             .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
+            /* Стилі для чекбоксів у меню */ \
+            .select-item__checkbox { width: 1.2em; height: 1.2em; border: 2px solid rgba(255,255,255,0.4); border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; } \
+            .select-item__checkbox--active { border-color: #fff; background: rgba(255,255,255,0.1); } \
+            .select-item__checkbox--active:after { content: "✓"; color: #fff; font-size: 0.9em; font-weight: bold; } \
+            .select-item.focus .select-item__checkbox { border-color: #000; } \
+            .select-item.focus .select-item__checkbox--active:after { color: #000; } \
         </style>');
     }
 
-    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ВНУТРІШНОСТІ ПАПКИ
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -73,12 +65,8 @@
                     card.onFocus = function (target) { last_focus = target; scroll.update(card.render()); };
                     card.onEnter = function () {
                         Lampa.Activity.push({
-                            url: data.url || '',
-                            component: 'full',
-                            id: data.id,
-                            method: data.name ? 'tv' : 'movie',
-                            card: data,
-                            source: data.source || 'tmdb'
+                            url: data.url || '', component: 'full', id: data.id,
+                            method: data.name ? 'tv' : 'movie', card: data, source: data.source || 'tmdb'
                         });
                     };
                     body.append(card.render());
@@ -106,18 +94,16 @@
             Lampa.Controller.toggle('content');
         };
 
-        this.pause = function () {};
-        this.stop = function () {};
+        this.pause = function () {}; this.stop = function () {};
         this.render = function () { return html; };
         this.destroy = function () {
             items.forEach(function (item) { item.destroy(); });
-            scroll.destroy();
-            html.remove();
+            scroll.destroy(); html.remove();
         };
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ КВАДРАТІВ ТА ЛОГІКИ
+    // 4. МЕНЮ "ВИБРАНЕ" - ЧИСТИЙ ПІДХІД БЕЗ ШАБЛОНІВ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -136,14 +122,17 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
+                        
+                        // Створюємо HTML елемент вручну для 100% сумісності
+                        var checkClass = exists ? 'select-item__checkbox select-item__checkbox--active' : 'select-item__checkbox';
+                        var opacity = exists ? '1' : '0.5';
+                        
                         customItems.push({ 
                             title: f.name,
-                            // Використовуємо іконки через властивість icon та шаблон icon
-                            icon: exists ? '<i class="icon--CheckBox"></i>' : '<i class="icon--CropSquare"></i>',
-                            template: 'icon',
                             is_custom: true, 
                             f_idx: i,
-                            style: exists ? '' : 'opacity: 0.5'
+                            // Передаємо HTML розмітку прямо в назву
+                            html: '<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; opacity: '+opacity+'"><span>'+f.name+'</span><div class="'+checkClass+'"></div></div>'
                         });
                     });
 
@@ -154,13 +143,10 @@
                         if (item.is_custom) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
-                            
                             var movieIdx = -1;
+                            
                             for(var j=0; j < target.list.length; j++) {
-                                if(target.list[j].id == movie.id) {
-                                    movieIdx = j;
-                                    break;
-                                }
+                                if(target.list[j].id == movie.id) { movieIdx = j; break; }
                             }
 
                             if (movieIdx > -1) {
@@ -174,15 +160,8 @@
                             saveFolders(fUpdate);
                             Lampa.Select.close();
                             
-                            // Перевідкриваємо меню для візуального оновлення
+                            // Оновлюємо та показуємо заново
                             setTimeout(function(){
-                                params.items.forEach(function(p_item) {
-                                    if(p_item.is_custom) {
-                                        var still_exists = fUpdate[p_item.f_idx].list.some(function(m) { return m.id == movie.id; });
-                                        p_item.icon = still_exists ? '<i class="icon--CheckBox"></i>' : '<i class="icon--CropSquare"></i>';
-                                        p_item.style = still_exists ? '' : 'opacity: 0.5';
-                                    }
-                                });
                                 Lampa.Select.show(params);
                             }, 10);
                         } else if (originalOnSelect) {
@@ -195,10 +174,9 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ В РОЗДІЛ ЗАКЛАДКИ
+    // 5. ІНТЕГРАЦІЯ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
-            loadFromCloud();
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
@@ -215,8 +193,7 @@
                                 if (name) {
                                     var f = getFolders();
                                     f.push({ name: name, list: [] });
-                                    saveFolders(f);
-                                    Lampa.Activity.replace();
+                                    saveFolders(f); Lampa.Activity.replace();
                                 }
                             });
                         });
@@ -231,10 +208,8 @@
                                     title: folder.name,
                                     items: [{ title: 'Видалити папку' }],
                                     onSelect: function() {
-                                        var f = getFolders();
-                                        f.splice(i, 1);
-                                        saveFolders(f);
-                                        Lampa.Activity.replace();
+                                        var f = getFolders(); f.splice(i, 1);
+                                        saveFolders(f); Lampa.Activity.replace();
                                     }
                                 });
                             });
