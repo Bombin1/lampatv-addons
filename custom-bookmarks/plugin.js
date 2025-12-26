@@ -19,29 +19,31 @@
         }
     }
 
-    // Стилі (100px ширина, 30% прозорість при фокусі)
+    // Стилі: Ширина 100px, Прозорість 30% при фокусі
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .folders-container { width: 100%; padding: 10px 0; margin-bottom: 20px; display: block; clear: both; } \
-            .folders-container__body { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
-            .folder-tile { \
+            .folders-overlay { width: 100%; padding: 20px 0 10px 0; background: #111; display: none; } \
+            .folders-overlay__body { display: flex; flex-wrap: wrap; padding: 0 20px; gap: 10px; } \
+            .folder-item { \
                 width: 100px; height: 65px; \
                 background-color: rgba(255, 255, 255, 0.05) !important; \
                 border-radius: 8px; border: 2px solid transparent; \
                 display: flex; flex-direction: column; justify-content: center; align-items: center; \
                 cursor: pointer; box-sizing: border-box; \
             } \
-            .folder-tile.focus { \
+            .folder-item.focus { \
                 background-color: rgba(255, 255, 255, 0.3) !important; \
-                border-color: #fff; transform: scale(1.05); z-index: 100; \
+                border-color: #fff; transform: scale(1.05); \
             } \
-            .folder-tile__name { font-size: 11px; color: #fff; text-align: center; margin-top: 3px; overflow: hidden; white-space: nowrap; width: 90%; } \
-            .folder-tile__icon { font-size: 16px; } \
-            .category-full { position: relative !important; top: 0 !important; } \
+            .folder-item__name { font-size: 11px; color: #fff; text-align: center; margin-top: 3px; overflow: hidden; white-space: nowrap; width: 90%; } \
+            .folder-item__icon { font-size: 16px; } \
+            /* Зсуваємо основний контент вниз, коли відкриті закладки */ \
+            .activity-bookmarks .scroll { margin-top: 100px !important; } \
+            .activity-bookmarks .folders-overlay { display: block; position: absolute; top: 0; left: 0; z-index: 10; } \
         </style>');
     }
 
-    // Компонент перегляду вмісту папки
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -71,89 +73,75 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    Lampa.Listener.follow('app', function (e) {
-        if (e.type === 'ready') {
-            var originalBookmarks = Lampa.Component.get('bookmarks');
-            
-            Lampa.Component.add('bookmarks', function (object) {
-                var comp = new originalBookmarks(object);
-                var originalRender = comp.render;
+    // СЛУХАЧ ВІДКРИТТЯ ЗАКЛАДОК
+    Lampa.Listener.follow('activity', function (e) {
+        if (e.type === 'start' && e.component === 'bookmarks') {
+            setTimeout(function() {
+                var view = e.object.render();
+                if (view.find('.folders-overlay').length) return;
 
-                comp.render = function () {
-                    var view = originalRender.call(comp);
-                    
-                    // ФІКС: Якщо папки вже додані на цю сторінку, не додаємо їх знову
-                    if (window.bookmarks_folders_added) return view;
+                var overlay = $('<div class="folders-overlay"><div class="folders-overlay__body"></div></div>');
+                var body = overlay.find('.folders-overlay__body');
+                var folders = getFolders();
 
-                    var folders = getFolders();
-                    var scrollContent = view.find('.scroll__content');
-
-                    if (scrollContent.length) {
-                        var container = $('<div class="folders-container"><div class="folders-container__body"></div></div>');
-                        var body = container.find('.folders-container__body');
-
-                        var addTile = function(title, icon, action, longAction) {
-                            var tile = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">'+icon+'</div><div class="folder-tile__name">'+title+'</div></div>');
-                            tile.on('hover:enter', action);
-                            if (longAction) tile.on('hover:long', longAction);
-                            body.append(tile);
-                        };
-
-                        addTile('Створити', '+', function() {
-                            Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
-                                if (name) {
-                                    var f = getFolders(); f.push({ name: name, list: [] });
-                                    saveFolders(f); window.bookmarks_folders_added = false; Lampa.Activity.replace();
-                                }
-                            });
-                        });
-
-                        folders.forEach(function(f, i) {
-                            addTile(f.name, '📁', function() {
-                                Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
-                            }, function() {
-                                Lampa.Select.show({
-                                    title: f.name,
-                                    items: [{ title: 'Видалити папку' }],
-                                    onSelect: function() {
-                                        var fList = getFolders(); fList.splice(i, 1);
-                                        saveFolders(fList); window.bookmarks_folders_added = false; Lampa.Activity.replace();
-                                    }
-                                });
-                            });
-                        });
-
-                        scrollContent.prepend(container);
-                        window.bookmarks_folders_added = true; // Помічаємо, що папки додані
-                    }
-
-                    var originalStart = comp.start;
-                    comp.start = function() {
-                        // Реєструємо всі елементи для навігації
-                        Lampa.Controller.collectionSet(view);
-                        // Запускаємо стандартний контролер
-                        originalStart.call(comp);
-                        
-                        // Якщо ми тільки зайшли, ставимо фокус на першу папку
-                        var first = view.find('.folder-tile').first()[0];
-                        if (first) Lampa.Controller.collectionFocus(first);
-                    };
-
-                    // При закритті закладок скидаємо прапорець
-                    var originalDestroy = comp.destroy;
-                    comp.destroy = function() {
-                        window.bookmarks_folders_added = false;
-                        if (originalDestroy) originalDestroy.call(comp);
-                    };
-
-                    return view;
+                var addFolder = function(name, icon, action, longAction) {
+                    var item = $('<div class="folder-item selector" tabindex="0"><div class="folder-item__icon">'+icon+'</div><div class="folder-item__name">'+name+'</div></div>');
+                    item.on('hover:enter', action);
+                    if (longAction) item.on('hover:long', longAction);
+                    body.append(item);
                 };
-                return comp;
-            }, true);
+
+                addFolder('Створити', '+', function() {
+                    Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                        if (name) {
+                            var f = getFolders(); f.push({ name: name, list: [] });
+                            saveFolders(f); Lampa.Activity.replace();
+                        }
+                    });
+                });
+
+                folders.forEach(function(f, i) {
+                    addFolder(f.name, '📁', function() {
+                        Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
+                    }, function() {
+                        Lampa.Select.show({
+                            title: f.name,
+                            items: [{ title: 'Видалити папку' }],
+                            onSelect: function() {
+                                var fList = getFolders(); fList.splice(i, 1);
+                                saveFolders(fList); Lampa.Activity.replace();
+                            }
+                        });
+                    });
+                });
+
+                view.append(overlay);
+
+                // ПЕРЕХОПЛЕННЯ КОНТРОЛЕРА
+                var originalController = Lampa.Controller.enabled().name;
+                
+                Lampa.Controller.add('bookmarks_custom', {
+                    toggle: function() {
+                        Lampa.Controller.collectionSet(view);
+                        Lampa.Controller.collectionFocus(view.find('.folder-item').first()[0]);
+                    },
+                    up: function() { Lampa.Controller.toggle('head'); },
+                    down: function() {
+                        // При натисканні вниз - повертаємось у стандартний контролер Lampa
+                        Lampa.Controller.toggle(originalController);
+                    },
+                    left: function() { Lampa.Controller.toggle('menu'); },
+                    back: function() { Lampa.Activity.backward(); }
+                });
+
+                // Примусово вмикаємо наш контролер
+                Lampa.Controller.toggle('bookmarks_custom');
+
+            }, 200);
         }
     });
 
-    // Меню вибору (додавання)
+    // МЕНЮ ДОДАВАННЯ (БЕЗ ЗМІН)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
