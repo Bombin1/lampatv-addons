@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Ваш оригінал плиток)
+    // 2. СТИЛІ (ВАШ ОРИГІНАЛ + ФІКС ДЛЯ ПРАВОГО КВАДРАТИКА)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -43,10 +43,13 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
+            /* Нові стилі для меню */ \
+            .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
+            .custom-folder-icon { font-size: 1.2em; opacity: 0.8; } \
         </style>');
     }
 
-    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ (БЕЗ ЗМІН)
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -107,7 +110,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ КВАДРАТІВ
+    // 4. МЕНЮ "ВИБРАНЕ" - БЕЗПЕЧНА РЕАЛІЗАЦІЯ БЕЗ ШАБЛОНІВ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -126,16 +129,17 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
+                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
+                        var textOpacity = exists ? '1' : '0.5';
+                        
                         customItems.push({ 
-                            title: f.name, 
+                            // Використовуємо html замість title для повної кастомізації
+                            html: '<div class="custom-folder-item" style="opacity: '+textOpacity+'"> \
+                                     <span>'+f.name+'</span> \
+                                     <i class="'+iconClass+' custom-folder-icon"></i> \
+                                   </div>',
                             is_custom: true, 
-                            f_idx: i,
-                            // Використовуємо системний шаблон чекбокса
-                            template: 'is_checked',
-                            // Стан чекбокса: true (квадрат з галкою), false (порожній квадрат)
-                            checked: exists,
-                            // Зміна кольору тексту: яскравий якщо в списку, тьмяний якщо ні
-                            style: exists ? '' : 'opacity: 0.5'
+                            f_idx: i
                         });
                     });
 
@@ -148,19 +152,13 @@
                             var target = fUpdate[item.f_idx];
                             var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
-                            if (movieIdx > -1) {
-                                target.list.splice(movieIdx, 1);
-                            } else {
-                                target.list.push(Object.assign({}, movie));
-                            }
+                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
+                            else target.list.push(Object.assign({}, movie));
                             
                             saveFolders(fUpdate);
-                            
-                            // Перевідкриваємо меню для миттєвого оновлення візуалу
                             Lampa.Select.close();
-                            setTimeout(function(){
-                                Lampa.Select.show(params);
-                            }, 10);
+                            // Перевідкриваємо, щоб побачити зміни
+                            setTimeout(function(){ Lampa.Select.show(params); }, 10);
                         } else if (originalOnSelect) {
                             originalOnSelect(item);
                         }
@@ -171,7 +169,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
+    // 5. ІНТЕГРАЦІЯ (БЕЗ ЗМІН)
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
