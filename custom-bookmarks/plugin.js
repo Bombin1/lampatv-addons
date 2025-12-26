@@ -5,7 +5,6 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // --- 1. РОБОТА З ДАНИМИ ---
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -21,32 +20,30 @@
         }
     }
 
-    // --- 2. СТИЛІ (ШИРИНА 100px, ПРОЗОРІСТЬ 30%) ---
+    // СТИЛІ (100px, 30% прозорість)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 10px; width: 100%; box-sizing: border-box; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 10px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgba(0, 0, 0, 0.3) !important; \
                 width: 100px; height: 75px; border-radius: 10px; \
                 display: flex; flex-direction: column; justify-content: center; align-items: flex-start; \
                 padding: 0 10px; cursor: pointer; transition: all 0.2s ease; \
-                border: 1px solid rgba(255, 255, 255, 0.05); \
-                box-sizing: border-box; \
+                border: 1px solid rgba(255, 255, 255, 0.1); \
             } \
-            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); outline: none; border: 1px solid #fff; z-index: 10; } \
-            .folder-tile__name { font-size: 0.9em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 4px; pointer-events: none; } \
+            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); border: 1px solid #fff; } \
+            .folder-tile__name { font-size: 0.9em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 4px; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
-            .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; pointer-events: none; } \
+            .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
             .folder-tile__count { font-size: 1.6em; font-weight: 500; color: #fff; line-height: 1; } \
             .folder-tile__total { font-size: 0.7em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
-            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); align-items: center; padding: 0; } \
-            .folder-tile--create .folder-tile__name { text-align: center; font-size: 0.85em; opacity: 0.7; margin: 0; } \
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.3); align-items: center; padding: 0; } \
         </style>');
     }
 
-    // --- 3. КОМПОНЕНТ ВМІСТУ ПАПКИ ---
+    // КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -86,7 +83,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- 4. ГОЛОВНА ЛОГІКА ТА ВИПРАВЛЕНА НАВІГАЦІЯ ---
+    // ІНТЕГРАЦІЯ ТА ФІКС НАВІГАЦІЇ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -94,6 +91,7 @@
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
+                var last_f_focus;
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
@@ -103,21 +101,17 @@
                     if (scrollContent.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
                         
-                        // Кнопка Створити
                         var createBtn = $('<div class="folder-tile folder-tile--create selector" tabindex="0"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
-                                    var f = getFolders();
-                                    f.push({ name: name, list: [] });
-                                    saveFolders(f);
-                                    Lampa.Activity.replace();
+                                    var f = getFolders(); f.push({ name: name, list: [] });
+                                    saveFolders(f); Lampa.Activity.replace();
                                 }
                             });
                         });
                         wrapper.append(createBtn);
 
-                        // Папки
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector" tabindex="0">' +
                                 '<div class="folder-tile__name">' + folder.name + '</div>' +
@@ -145,17 +139,28 @@
 
                         scrollContent.prepend(wrapper);
 
-                        // ФІКС НАВІГАЦІЇ:
-                        // Використовуємо стандартний старт, але після нього перераховуємо колекцію елементів
+                        // РЕЄСТРУЄМО ОКРЕМИЙ КОНТРОЛЕР ДЛЯ ПАПОК
+                        Lampa.Controller.add('custom_folders_ctrl', {
+                            toggle: function() {
+                                Lampa.Controller.collectionSet(wrapper);
+                                Lampa.Controller.collectionFocus(last_f_focus || createBtn[0]);
+                            },
+                            down: function() {
+                                // Виходимо з папок вниз до стандартного контенту Lampa
+                                last_f_focus = wrapper.find('.focus')[0];
+                                Lampa.Controller.toggle('content');
+                            },
+                            up: function() { Lampa.Controller.toggle('head'); },
+                            left: function() { Lampa.Controller.toggle('menu'); },
+                            back: function() { Lampa.Activity.backward(); }
+                        });
+
+                        // ПЕРЕХОПЛЮЄМО СТАРТ
                         var originalStart = comp.start;
                         comp.start = function() {
                             originalStart.call(comp);
-                            
-                            // Даємо 50мс на те, щоб Lampa ініціалізувала свій контролер, 
-                            // а потім примусово додаємо наші папки в його область видимості
-                            setTimeout(function() {
-                                Lampa.Controller.collectionSet(view);
-                            }, 50);
+                            // Примусово фокусуємося на папках при відкритті закладок
+                            Lampa.Controller.toggle('custom_folders_ctrl');
                         };
                     }
                     return view;
@@ -165,7 +170,7 @@
         }
     });
 
-    // --- 5. МЕНЮ ВИБОРУ ПРИ ДОДАВАННІ ---
+    // МЕНЮ ДОДАВАННЯ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
