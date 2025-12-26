@@ -19,18 +19,16 @@
         }
     }
 
-    // Стилі тільки для плиток у розділі "Закладки"
+    // Стилі для плиток у Закладках
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgb(19, 22, 22) !important; \
-                width: 118px; height: 66px; \
-                border-radius: 8px; \
+                width: 118px; height: 66px; border-radius: 8px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
-                cursor: pointer; transition: all 0.2s ease; \
-                border: 1px solid rgba(255, 255, 255, 0.05); \
+                cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { background-color: #fff !important; color: #000 !important; transform: scale(1.05); } \
             .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
@@ -38,10 +36,13 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
+            /* Стиль іконки в меню */ \
+            .custom-check-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 1.3em; } \
+            .selectbox-item.focus .custom-check-icon { color: #000; } \
         </style>');
     }
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ВИКОРИСТОВУЄМО ВНУТРІШНІЙ ТЕМПЛЕЙТ LAMPA
+    // МЕНЮ ВИБОРУ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -54,20 +55,25 @@
             var movie = active.card || active.data;
 
             if (folders.length > 0 && movie) {
-                // Очищаємо старі кастомні пункти
                 params.items = params.items.filter(function(i) { return !i.is_custom; });
 
                 var customItems = [];
                 folders.forEach(function(f, i) {
                     var exists = f.list.some(function(m) { return m.id == movie.id; });
                     
+                    // Визначаємо клас іконки як у оригіналі
+                    var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
+
                     customItems.push({
                         title: f.name,
-                        selected: exists, // Ключовий параметр Lampa для галочки
-                        ghost: !exists,   // Ключовий параметр для порожнього квадрата
                         is_custom: true,
                         f_idx: i,
-                        template: 'selectbox_item' // Примусово використовуємо системний шаблон рядка
+                        // Важливо: додаємо іконку прямо в назву через span, 
+                        // щоб система не ламалася на пошуку шаблонів
+                        onRender: function(item_element) {
+                            $(item_element).css('position','relative');
+                            $(item_element).append('<i class="'+iconClass+' custom-check-icon"></i>');
+                        }
                     });
                 });
 
@@ -88,8 +94,6 @@
                         
                         saveFolders(fUpdate);
                         Lampa.Select.close();
-                        
-                        // Перемальовуємо через затримку
                         setTimeout(function(){ Lampa.Select.show(params); }, 10);
                     } else if (originalOnSelect) {
                         originalOnSelect(item);
@@ -100,7 +104,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // Компонент перегляду папки та інтеграція (залишаються робочими)
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
