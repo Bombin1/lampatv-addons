@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // СТИЛІ (Розмір зменшено ще на 1/7)
+    // СТИЛІ
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 5px; width: 100%; } \
@@ -29,10 +29,7 @@
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
-            .folder-tile.focus { \
-                background: #fff !important; color: #000 !important; \
-                transform: scale(1.05); \
-            } \
+            .folder-tile.focus { background: #fff !important; color: #000 !important; transform: scale(1.05); } \
             .folder-tile__name { font-size: 0.65em; font-weight: 500; text-align: center; padding: 0 3px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
             .folder-tile__count { font-size: 0.5em; opacity: 0.5; margin-top: 1px; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
@@ -152,7 +149,7 @@
         }
     });
 
-    // 3. МЕНЮ З ГАЛОЧКАМИ (check: true)
+    // 3. МЕНЮ БЕЗ ДУБЛІКАТІВ ТА З ГАЛОЧКАМИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -160,45 +157,49 @@
         });
 
         if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
-            var folders = getFolders();
-            var active = Lampa.Activity.active();
-            var movie = active.card || active.data;
+            // ПЕРЕВІРКА НА ДУБЛІКАТИ
+            if (!params.items.some(function(i) { return i.is_custom_header; })) {
+                var folders = getFolders();
+                var active = Lampa.Activity.active();
+                var movie = active.card || active.data;
 
-            if (folders.length > 0 && movie) {
-                params.items.push({ title: 'ПАПКИ', separator: true });
-                folders.forEach(function(f, i) {
-                    var exists = f.list.some(function(m) { return m.id == movie.id; });
-                    params.items.push({ 
-                        title: f.name, 
-                        is_custom: true, 
-                        f_idx: i,
-                        check: exists // ОСЬ ЦЕ ВКЛЮЧАЄ ГАЛОЧКУ
+                if (folders.length > 0 && movie) {
+                    params.items.push({ title: 'ПАПКИ', separator: true, is_custom_header: true });
+                    folders.forEach(function(f, i) {
+                        var exists = f.list.some(function(m) { return m.id == movie.id; });
+                        params.items.push({ 
+                            title: f.name, 
+                            is_custom: true, 
+                            f_idx: i,
+                            selected: exists // Використовуємо selected для стабільної галочки
+                        });
                     });
-                });
 
-                var originalOnSelect = params.onSelect;
-                params.onSelect = function (item) {
-                    if (item.is_custom) {
-                        var fUpdate = getFolders();
-                        var target = fUpdate[item.f_idx];
-                        var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
+                    var originalOnSelect = params.onSelect;
+                    params.onSelect = function (item) {
+                        if (item.is_custom) {
+                            var fUpdate = getFolders();
+                            var target = fUpdate[item.f_idx];
+                            var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
-                        if (movieIdx > -1) {
-                            target.list.splice(movieIdx, 1);
-                        } else {
-                            target.list.push(Object.assign({}, movie));
+                            if (movieIdx > -1) {
+                                target.list.splice(movieIdx, 1);
+                            } else {
+                                target.list.push(Object.assign({}, movie));
+                            }
+                            saveFolders(fUpdate);
+                            
+                            // Повне оновлення стану меню
+                            item.selected = !item.selected;
+                            Lampa.Select.close();
+                            setTimeout(function(){
+                                Lampa.Select.show(params);
+                            }, 10);
+                        } else if (originalOnSelect) {
+                            originalOnSelect(item);
                         }
-                        saveFolders(fUpdate);
-                        
-                        // Закриваємо поточне меню і відкриваємо знову для оновлення галочок
-                        Lampa.Select.close();
-                        setTimeout(function(){
-                            Lampa.Select.show(params);
-                        }, 10);
-                    } else if (originalOnSelect) {
-                        originalOnSelect(item);
-                    }
-                };
+                    };
+                }
             }
         }
         originalSelectShow.call(Lampa.Select, params);
