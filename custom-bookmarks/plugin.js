@@ -5,7 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // --- 1. РОБОТА З ДАНИМИ ТА ХМАРОЮ ---
+    // --- 1. РОБОТА З ДАНИМИ ---
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -15,33 +15,20 @@
 
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
-        
-        // Відправка в хмару Lampa
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.set(STORAGE_KEY, folders);
             if (window.Lampa.Cloud.sync) window.Lampa.Cloud.sync();
         }
     }
 
-    // Підтягування даних з хмари при старті
-    function loadFromCloud() {
-        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
-            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
-                if (data && Array.isArray(data) && data.length > 0) {
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                }
-            });
-        }
-    }
-
-    // --- 2. СТИЛІ (ПРОЗОРІСТЬ 30%, ЧОРНИЙ) ---
+    // --- 2. СТИЛІ (ПРОЗОРІСТЬ 30%) ---
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 10px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgba(0, 0, 0, 0.3) !important; \
-                width: 100px; height: 75px; border-radius: 10px; \
+                width: 110px; height: 80px; border-radius: 10px; \
                 display: flex; flex-direction: column; justify-content: center; align-items: flex-start; \
                 padding: 0 12px; cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
@@ -58,7 +45,7 @@
         </style>');
     }
 
-    // --- 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ВМІСТУ ПАПКИ ---
+    // --- 3. КОМПОНЕНТ ПАПКИ ---
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -88,7 +75,6 @@
                     if (items.length) { Lampa.Controller.collectionSet(scroll.render()); Lampa.Controller.collectionFocus(last_focus || items[0].render()); }
                     else { Lampa.Controller.toggle('empty'); }
                 },
-                left: function () { Lampa.Controller.toggle('menu'); },
                 up: function () { Lampa.Controller.toggle('head'); },
                 back: function () { Lampa.Activity.backward(); }
             });
@@ -99,15 +85,15 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- 4. ІНТЕГРАЦІЯ ТА ВИПРАВЛЕННЯ НАВІГАЦІЇ (ПУЛЬТ) ---
+    // --- 4. ГОЛОВНА ЛОГІКА ТА ФІКС ПУЛЬТА ---
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
-            loadFromCloud(); // Завантажуємо дані при старті додатка
-
             var originalBookmarks = Lampa.Component.get('bookmarks');
+            
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
+                var last_folder_focus;
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
@@ -159,12 +145,47 @@
 
                         container.prepend(wrapper);
 
-                        // ФІКС ПУЛЬТА: Перехоплюємо старт контролера
+                        // --- РЕЄСТРАЦІЯ ОКРЕМОГО КОНТРОЛЕРА ДЛЯ ПАПОК ---
+                        Lampa.Controller.add('bookmarks_folders', {
+                            toggle: function () {
+                                Lampa.Controller.collectionSet(wrapper);
+                                Lampa.Controller.collectionFocus(last_folder_focus || wrapper.find('.selector').first()[0]);
+                            },
+                            down: function () {
+                                // При натисканні вниз переходимо до основного контенту (карток)
+                                Lampa.Controller.toggle('content');
+                            },
+                            up: function () {
+                                Lampa.Controller.toggle('head');
+                            },
+                            left: function () {
+                                Lampa.Controller.toggle('menu');
+                            },
+                            back: function () {
+                                Lampa.Activity.backward();
+                            }
+                        });
+
+                        // Перехоплюємо стандартний контролер, щоб він знав, куди йти "Вгору"
                         var originalStart = comp.start;
                         comp.start = function() {
                             originalStart.call(comp);
-                            // Змушуємо контролер Lampa переглянути весь контейнер (включаючи наші папки)
-                            Lampa.Controller.collectionSet(view);
+                            
+                            var current_controller = Lampa.Controller.enabled().name;
+                            if (Lampa.Controller.get(current_controller)) {
+                                var ctrl = Lampa.Controller.get(current_controller);
+                                var old_up = ctrl.up;
+                                
+                                ctrl.up = function() {
+                                    // Якщо ми на самому верху списку карток і тиснемо вгору - йдемо до папок
+                                    var focused = wrapper.find('.focus');
+                                    if (focused.length == 0) {
+                                        Lampa.Controller.toggle('bookmarks_folders');
+                                    } else if (old_up) {
+                                        old_up.call(ctrl);
+                                    }
+                                };
+                            }
                         };
                     }
                     return view;
@@ -174,7 +195,7 @@
         }
     });
 
-    // --- 5. МЕНЮ ДОДАВАННЯ У ПАПКУ ---
+    // --- 5. МЕНЮ ВИБОРУ ПРИ ДОДАВАННІ ---
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
