@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Додаємо стилі (залишаємо твої улюблені стокові)
+    // Стилі папок
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
@@ -28,34 +28,29 @@
         </style>');
     }
 
-    // 1. ПЕРЕХОПЛЕННЯ КОМПОНЕНТА (НОВИЙ ПІДХІД)
-    // Ми не чіпаємо render, ми підміняємо саму функцію ініціалізації
-    var originalCategoryFull = Lampa.Component.get('category_full');
-    Lampa.Component.add('category_full', function (object) {
-        var comp = new originalCategoryFull(object);
+    // 1. СТВОРЮЄМО ЧИСТИЙ КОМПОНЕНТ ДЛЯ ПЕРЕГЛЯДУ (без завантаження)
+    Lampa.Component.add('custom_folder_view', function (object) {
+        var comp = new Lampa.Component.get('category_full')(object);
         
-        if (object.is_custom_folder) {
-            // Переписуємо метод завантаження даних
-            comp.onBuild = function () {
-                // Замість звернення до length об'єкта, якого немає в а-ля API, 
-                // ми примусово згодовуємо йому масив
-                var data = {
-                    results: object.items || [],
-                    page: 1,
-                    total_pages: 1
-                };
-                
-                // Викликаємо внутрішній метод побудови списку
-                setTimeout(function() {
-                    comp.build(data);
-                }, 10);
-            };
+        // Переписуємо функцію створення
+        comp.create = function () {
+            this.activity.loader(false); // ПРИМУСОВО ВИМИКАЄМО КРУТІЛКУ
             
-            // Забороняємо компоненту малювати "Тут порожньо" завчасно
-            comp.empty = function() {};
-        }
+            // Відразу будуємо список з переданих даних
+            this.build({
+                results: object.items || [],
+                total_pages: 1,
+                page: 1
+            });
+            
+            return this.render();
+        };
+
+        // Вимикаємо будь-які спроби завантажити наступну сторінку
+        comp.next = function () {};
+        
         return comp;
-    }, true);
+    });
 
     // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
@@ -92,10 +87,8 @@
                             tile.on('click', function() {
                                 Lampa.Activity.push({
                                     title: folder.name,
-                                    component: 'category_full',
-                                    is_custom_folder: true,
+                                    component: 'custom_folder_view', // Використовуємо наш новий компонент
                                     items: folder.list || [],
-                                    url: '', // Порожній URL, щоб не було запитів до мережі
                                     page: 1
                                 });
                             });
@@ -123,7 +116,7 @@
         }
     });
 
-    // 3. ДОДАВАННЯ (ЗБЕРЕЖЕННЯ "ЧИСТИХ" ДАНИХ)
+    // 3. ДОДАВАННЯ (ЗБЕРЕЖЕННЯ ДАНИХ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { 
@@ -147,11 +140,9 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // ПОВНА копія об'єкта, щоб Lampa мала всі поля для рендеру
-                        var movieData = JSON.parse(JSON.stringify(movie));
-                        
-                        if (!target.list.some(function(m) { return m.id == movieData.id; })) {
-                            target.list.push(movieData);
+                        if (!target.list.some(function(m) { return m.id == movie.id; })) {
+                            var movieToSave = JSON.parse(JSON.stringify(movie));
+                            target.list.push(movieToSave);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
