@@ -19,20 +19,20 @@
         }
     }
 
-    // ОНОВЛЕНО: РОЗМІР 100px, КОЛІР 21, 24, 29, ШРИФТИ +20% ТА +30%
+    // ОНОВЛЕНО: ПРОЗОРІСТЬ 25%, ШРИФТ ЛІЧИЛЬНИКА +15%
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgb(21, 24, 29) !important; \
+                background-color: rgba(21, 24, 29, 0.25) !important; \
                 width: 100px; \
-                height: 70px; \
+                height: 72px; \
                 border-radius: 10px; \
                 display: flex; flex-direction: column; justify-content: space-between; \
-                padding: 8px; \
+                padding: 10px 8px 6px 8px; \
                 cursor: pointer; transition: all 0.2s ease; \
-                border: 1px solid rgba(255, 255, 255, 0.03); \
+                border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { \
                 background-color: #fff !important; \
@@ -44,15 +44,15 @@
             } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
-            .folder-tile__count { font-size: 1.85em; font-weight: 500; color: #fff; line-height: 1; } \
+            .folder-tile__count { font-size: 2.1em; font-weight: 500; color: #fff; line-height: 0.9; } \
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
             .folder-tile--create { \
-                background-color: rgb(21, 24, 29) !important; \
+                background-color: rgba(21, 24, 29, 0.25) !important; \
                 border: 1px dashed rgba(255, 255, 255, 0.15); \
-                justify-content: center; align-items: center; \
+                justify-content: center; align-items: center; padding: 8px; \
             } \
-            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; } \
+            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; white-space: normal; } \
         </style>');
     }
 
