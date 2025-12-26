@@ -20,70 +20,61 @@
         }
     }
 
-    // СТИЛІ (100px, 30% прозорість)
+    // СТИЛІ
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 10px; width: 100%; } \
+            .custom-folders-line { padding: 10px 0; width: 100%; overflow: hidden; } \
+            .custom-folders-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 15px; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgba(0, 0, 0, 0.3) !important; \
-                width: 100px; height: 75px; border-radius: 10px; \
+                width: 100px; height: 70px; border-radius: 8px; \
                 display: flex; flex-direction: column; justify-content: center; align-items: flex-start; \
                 padding: 0 10px; cursor: pointer; transition: all 0.2s ease; \
-                border: 1px solid rgba(255, 255, 255, 0.1); \
+                border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
-            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); border: 1px solid #fff; } \
-            .folder-tile__name { font-size: 0.9em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 4px; } \
+            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); border: 1px solid #fff; z-index: 2; } \
+            .folder-tile__name { font-size: 0.85em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 2px; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
-            .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
-            .folder-tile__count { font-size: 1.6em; font-weight: 500; color: #fff; line-height: 1; } \
-            .folder-tile__total { font-size: 0.7em; opacity: 0.4; color: #fff; } \
-            .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
-            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.3); align-items: center; padding: 0; } \
+            .folder-tile__count { font-size: 1.5em; font-weight: 500; color: #fff; line-height: 1; } \
+            .folder-tile.focus .folder-tile__count { color: #000; } \
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.3); align-items: center; } \
         </style>');
     }
 
-    // КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
+    // Компонент перегляду папки (залишаємо без змін)
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
         var html = $('<div></div>');
         var body = $('<div class="category-full"></div>');
-        var last_focus;
-
         this.create = function () {
             this.activity.loader(false);
             if (object.items && object.items.length) {
                 object.items.forEach(function (data) {
                     var card = new Lampa.Card(data, { card_category: true, is_static: true });
                     card.create();
-                    card.onFocus = function (target) { last_focus = target; scroll.update(card.render()); };
-                    card.onEnter = function () {
-                        Lampa.Activity.push({ url: data.url || '', component: 'full', id: data.id, method: data.name ? 'tv' : 'movie', card: data, source: data.source || 'tmdb' });
-                    };
+                    card.onFocus = function (target) { scroll.update(card.render()); };
+                    card.onEnter = function () { Lampa.Activity.push({ url: data.url || '', component: 'full', id: data.id, method: data.name ? 'tv' : 'movie', card: data, source: data.source || 'tmdb' }); };
                     body.append(card.render()); items.push(card);
                 });
                 scroll.append(body); html.append(scroll.render());
             } else { html.append('<div class="empty">Тут порожньо</div>'); }
         };
-
         this.start = function () {
             Lampa.Controller.add('content', {
-                toggle: function () {
-                    if (items.length) { Lampa.Controller.collectionSet(scroll.render()); Lampa.Controller.collectionFocus(last_focus || items[0].render()); }
-                    else { Lampa.Controller.toggle('empty'); }
-                },
+                toggle: function () { Lampa.Controller.collectionSet(scroll.render()); Lampa.Controller.collectionFocus(items[0] ? items[0].render() : null); },
                 up: function () { Lampa.Controller.toggle('head'); },
                 back: function () { Lampa.Activity.backward(); }
             });
             Lampa.Controller.toggle('content');
         };
-        this.pause = function () {}; this.stop = function () {}; this.render = function () { return html; };
+        this.render = function () { return html; };
         this.destroy = function () { items.forEach(function (item) { item.destroy(); }); scroll.destroy(); html.remove(); };
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // ІНТЕГРАЦІЯ ТА ФІКС НАВІГАЦІЇ
+    // ОСНОВНА ЛОГІКА
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -91,16 +82,18 @@
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
-                var last_f_focus;
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
                     var folders = getFolders();
-                    var scrollContent = view.find('.scroll__content').first();
+                    // Шукаємо основний контейнер, куди Lampa складає свої картки
+                    var container = view.find('.category-full, .bookmarks-list, .scroll__content, .bookmarks__content').first();
                     
-                    if (scrollContent.length) {
-                        var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
+                    if (container.length) {
+                        var foldersLine = $('<div class="custom-folders-line"><div class="custom-folders-list"></div></div>');
+                        var list = foldersLine.find('.custom-folders-list');
                         
+                        // Кнопка Створити
                         var createBtn = $('<div class="folder-tile folder-tile--create selector" tabindex="0"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
@@ -110,20 +103,17 @@
                                 }
                             });
                         });
-                        wrapper.append(createBtn);
+                        list.append(createBtn);
 
+                        // Папки
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector" tabindex="0">' +
                                 '<div class="folder-tile__name">' + folder.name + '</div>' +
-                                '<div class="folder-tile__count_wrap">' +
-                                    '<span class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + '</span>' +
-                                    '<span class="folder-tile__total">/ 500</span>' +
-                                '</div></div>');
-                            
+                                '<div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + '</div>' +
+                            '</div>');
                             tile.on('click', function() {
                                 Lampa.Activity.push({ title: folder.name, component: 'custom_folder_component', items: folder.list || [] });
                             });
-
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
@@ -134,33 +124,18 @@
                                     }
                                 });
                             });
-                            wrapper.append(tile);
+                            list.append(tile);
                         });
 
-                        scrollContent.prepend(wrapper);
+                        container.prepend(foldersLine);
 
-                        // РЕЄСТРУЄМО ОКРЕМИЙ КОНТРОЛЕР ДЛЯ ПАПОК
-                        Lampa.Controller.add('custom_folders_ctrl', {
-                            toggle: function() {
-                                Lampa.Controller.collectionSet(wrapper);
-                                Lampa.Controller.collectionFocus(last_f_focus || createBtn[0]);
-                            },
-                            down: function() {
-                                // Виходимо з папок вниз до стандартного контенту Lampa
-                                last_f_focus = wrapper.find('.focus')[0];
-                                Lampa.Controller.toggle('content');
-                            },
-                            up: function() { Lampa.Controller.toggle('head'); },
-                            left: function() { Lampa.Controller.toggle('menu'); },
-                            back: function() { Lampa.Activity.backward(); }
-                        });
-
-                        // ПЕРЕХОПЛЮЄМО СТАРТ
+                        // Використовуємо метод з my_bookmarks.js:
+                        // Переписуємо старт, щоб він робив collectionSet для всього view
                         var originalStart = comp.start;
                         comp.start = function() {
                             originalStart.call(comp);
-                            // Примусово фокусуємося на папках при відкритті закладок
-                            Lampa.Controller.toggle('custom_folders_ctrl');
+                            // Це змушує Lampa перерахувати всі елементи .selector на сторінці
+                            Lampa.Controller.collectionSet(view);
                         };
                     }
                     return view;
@@ -170,7 +145,7 @@
         }
     });
 
-    // МЕНЮ ДОДАВАННЯ
+    // МЕНЮ ДОДАВАННЯ (залишаємо без змін)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
