@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Для плиток та вирівнювання тексту)
+    // 2. СТИЛІ (Тільки для плиток у Закладках)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,15 +39,10 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            \
-            /* Рядок меню */ \
-            .custom-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 5px 0; } \
-            .custom-row span { font-size: 1.1em; } \
-            .custom-row b { font-size: 1.4em; font-weight: normal; margin-left: 10px; } \
         </style>');
     }
 
-    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ (БЕЗ ЗМІН)
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -102,7 +97,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ ВИБОРУ (UNICODE ВЕРСІЯ)
+    // 4. МЕНЮ "ВИБРАНЕ" - ТЕКСТОВА ВЕРСІЯ (НАЙБІЛЬШ СУМІСНА)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -121,15 +116,12 @@
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
                         
-                        // Використовуємо символи: 
-                        // ☐ (U+2610) - порожній квадрат
-                        // ☑ (U+2611) - квадрат з галочкою
-                        var icon = exists ? '☑' : '☐';
-                        var opacity = exists ? '1' : '0.5';
+                        // Використовуємо прості символи: [ ] та [X]
+                        // Додаємо багато нерозривних пробілів для імітації вирівнювання по правому краю
+                        var mark = exists ? '[X]' : '[  ]';
                         
                         customItems.push({ 
-                            title: f.name,
-                            html: '<div class="custom-row" style="opacity: '+opacity+'"><span>'+f.name+'</span><b>'+icon+'</b></div>',
+                            title: f.name + '                                          ' + mark,
                             is_custom_item: true, 
                             f_idx: i
                         });
