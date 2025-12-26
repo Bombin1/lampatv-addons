@@ -25,7 +25,7 @@
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(0, 0, 0, 0.40) !important; \
+                background-color: rgba(0, 0, 0, 0.30) !important; \
                 width: 100px; \
                 height: 75px; \
                 border-radius: 10px; \
@@ -52,7 +52,7 @@
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
             .folder-tile--create { \
-                background-color: rgba(0, 0, 0, 0.95) !important; \
+                background-color: rgba(0, 0, 0, 0.30) !important; \
                 border: 1px dashed rgba(255, 255, 255, 0.15); \
                 align-items: center; padding: 0; \
             } \
