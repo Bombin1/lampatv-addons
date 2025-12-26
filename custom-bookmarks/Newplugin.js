@@ -15,17 +15,15 @@
 
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
-        syncCloud(folders); // Відправка в хмару при кожній зміні
+        syncCloud(folders);
     }
 
-    // Синхронізація з хмарою Lampa (CUB)
     function syncCloud(folders) {
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.set(STORAGE_KEY, folders);
         }
     }
 
-    // Завантаження з хмари при старті
     function loadFromCloud(callback) {
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
@@ -37,16 +35,16 @@
         }
     }
 
-    // 2. СТИЛІ (Ваші налаштування: 118x66, rgb(19, 22, 22), непрозорі)
+    // 2. СТИЛІ (Розмір зменшено на 1/5, шрифт збільшено)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 7px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgb(19, 22, 22) !important; \
                 opacity: 1 !important; \
-                width: 118px; height: 66px; \
-                border-radius: 8px; \
+                width: 94px; height: 53px; \
+                border-radius: 7px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
@@ -56,9 +54,19 @@
                 color: #000 !important; \
                 transform: scale(1.05); \
             } \
-            .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
+            .folder-tile__name { \
+                font-size: 0.85em; /* ТРОШКИ ЗБІЛЬШЕНО ШРИФТ */ \
+                font-weight: 600; \
+                text-align: center; \
+                padding: 0 4px; \
+                white-space: nowrap; \
+                text-overflow: ellipsis; \
+                overflow: hidden; \
+                width: 100%; \
+                color: #fff; \
+            } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
-            .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
+            .folder-tile__count { font-size: 0.6em; opacity: 0.6; margin-top: 2px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
         </style>');
@@ -127,7 +135,6 @@
     // 4. ІНТЕГРАЦІЯ ТА СТАРТ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
-            // Підтягуємо дані з хмари при запуску
             loadFromCloud();
 
             var originalBookmarks = Lampa.Component.get('bookmarks');
