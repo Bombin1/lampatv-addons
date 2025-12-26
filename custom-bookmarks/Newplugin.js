@@ -30,7 +30,7 @@
         }
     }
 
-    // 2. СТИЛІ (118x66, rgb(19, 22, 22))
+    // 2. СТИЛІ (ВАШ ОРИГІНАЛ)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -119,7 +119,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ЧЕКБОКСИ ЯК В ОРИГІНАЛІ
+    // 4. МЕНЮ "ВИБРАНЕ" - ТЕПЕР З КВАДРАТИКАМИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -142,8 +142,9 @@
                             title: f.name, 
                             is_custom: true, 
                             f_idx: i,
-                            checkbox: true, // ВИКОРИСТОВУЄМО СИСТЕМНИЙ ЧЕКБОКС (КВАДРАТ)
-                            selected: exists 
+                            template: 'is_checked', // ВИКОРИСТОВУЄМО ШАБЛОН ЧЕКБОКСА
+                            ghost: !exists,         // Порожній квадрат, якщо не вибрано
+                            selected: exists        // Квадрат з галочкою, якщо вибрано
                         });
                     });
 
@@ -156,13 +157,22 @@
                             var target = fUpdate[item.f_idx];
                             var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
-                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
-                            else target.list.push(Object.assign({}, movie));
+                            if (movieIdx > -1) {
+                                target.list.splice(movieIdx, 1);
+                                item.selected = false;
+                                item.ghost = true;
+                            } else {
+                                target.list.push(Object.assign({}, movie));
+                                item.selected = true;
+                                item.ghost = false;
+                            }
                             
                             saveFolders(fUpdate);
                             
                             Lampa.Select.close();
-                            setTimeout(function(){ Lampa.Select.show(params); }, 10);
+                            setTimeout(function(){
+                                Lampa.Select.show(params);
+                            }, 10);
                         } else if (originalOnSelect) {
                             originalOnSelect(item);
                         }
