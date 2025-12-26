@@ -5,7 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // 1. ФУНКЦІЇ РОБОТИ З ДАНИМИ ТА СИНХРОНІЗАЦІЄЮ
+    // 1. РОБОТА З ДАНИМИ ТА СИНХРОНІЗАЦІЯ
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -15,36 +15,31 @@
 
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
-        syncCloud(folders);
-    }
-
-    function syncCloud(folders) {
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.set(STORAGE_KEY, folders);
         }
     }
 
-    function loadFromCloud(callback) {
+    function loadFromCloud() {
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
                 if (data && Array.isArray(data)) {
                     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                    if (callback) callback();
                 }
             });
         }
     }
 
-    // 2. СТИЛІ (Розмір зменшено на 1/5, шрифт збільшено)
+    // 2. СТИЛІ (ПОВЕРНУТО ДО ВАШОГО ОРИГІНАЛУ)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 7px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background-color: rgb(19, 22, 22) !important; \
                 opacity: 1 !important; \
-                width: 94px; height: 53px; \
-                border-radius: 7px; \
+                width: 118px; height: 66px; \
+                border-radius: 8px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
@@ -53,27 +48,18 @@
                 background-color: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
+                opacity: 1 !important; \
             } \
-            .folder-tile__name { \
-                font-size: 0.85em; /* ТРОШКИ ЗБІЛЬШЕНО ШРИФТ */ \
-                font-weight: 600; \
-                text-align: center; \
-                padding: 0 4px; \
-                white-space: nowrap; \
-                text-overflow: ellipsis; \
-                overflow: hidden; \
-                width: 100%; \
-                color: #fff; \
-            } \
+            .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
-            .folder-tile__count { font-size: 0.6em; opacity: 0.6; margin-top: 2px; color: #fff; } \
+            .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
         </style>');
     }
 
     // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ПАПКИ
-    Lampa.Component.add('custom_folder_component', function (object) {
+    function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
         var html = $('<div></div>');
@@ -122,21 +108,75 @@
             Lampa.Controller.toggle('content');
         };
 
-        this.render = function () { return html; };
         this.pause = function () {};
         this.stop = function () {};
+        this.render = function () { return html; };
         this.destroy = function () {
             items.forEach(function (item) { item.destroy(); });
             scroll.destroy();
             html.remove();
         };
-    });
+    }
+    Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. ІНТЕГРАЦІЯ ТА СТАРТ
+    // 4. МЕНЮ "ВИБРАНЕ" - ТЕПЕР ВГОРУ СПИСКУ
+    var originalSelectShow = Lampa.Select.show;
+    Lampa.Select.show = function (params) {
+        var isFavMenu = params && params.items && params.items.some(function(i) { 
+            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
+        });
+
+        if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
+            if (!params.items.some(function(i) { return i.is_custom_header; })) {
+                var folders = getFolders();
+                var active = Lampa.Activity.active();
+                var movie = active.card || active.data;
+
+                if (folders.length > 0 && movie) {
+                    var customItems = [];
+                    customItems.push({ title: 'ПАПКИ', separator: true, is_custom_header: true });
+                    
+                    folders.forEach(function(f, i) {
+                        var exists = f.list.some(function(m) { return m.id == movie.id; });
+                        customItems.push({ 
+                            title: f.name, 
+                            is_custom: true, 
+                            f_idx: i,
+                            selected: exists 
+                        });
+                    });
+
+                    // ДОДАЄМО НАШІ ПАПКИ В ПОЧАТОК СПИСКУ
+                    params.items = customItems.concat(params.items);
+
+                    var originalOnSelect = params.onSelect;
+                    params.onSelect = function (item) {
+                        if (item.is_custom) {
+                            var fUpdate = getFolders();
+                            var target = fUpdate[item.f_idx];
+                            var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
+
+                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
+                            else target.list.push(Object.assign({}, movie));
+                            
+                            saveFolders(fUpdate);
+                            item.selected = !item.selected;
+                            Lampa.Select.close();
+                            setTimeout(function(){ Lampa.Select.show(params); }, 10);
+                        } else if (originalOnSelect) {
+                            originalOnSelect(item);
+                        }
+                    };
+                }
+            }
+        }
+        originalSelectShow.call(Lampa.Select, params);
+    };
+
+    // 5. ІНТЕГРАЦІЯ В РОЗДІЛ ЗАКЛАДОК
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             loadFromCloud();
-
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
@@ -186,58 +226,4 @@
             }, true);
         }
     });
-
-    // 5. МЕНЮ З ГАЛОЧКАМИ
-    var originalSelectShow = Lampa.Select.show;
-    Lampa.Select.show = function (params) {
-        var isFavMenu = params && params.items && params.items.some(function(i) { 
-            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
-        });
-
-        if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
-            if (!params.items.some(function(i) { return i.is_custom_header; })) {
-                var folders = getFolders();
-                var active = Lampa.Activity.active();
-                var movie = active.card || active.data;
-
-                if (folders.length > 0 && movie) {
-                    params.items.push({ title: 'ПАПКИ', separator: true, is_custom_header: true });
-                    folders.forEach(function(f, i) {
-                        var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        params.items.push({ 
-                            title: f.name, 
-                            is_custom: true, 
-                            f_idx: i,
-                            selected: exists 
-                        });
-                    });
-
-                    var originalOnSelect = params.onSelect;
-                    params.onSelect = function (item) {
-                        if (item.is_custom) {
-                            var fUpdate = getFolders();
-                            var target = fUpdate[item.f_idx];
-                            var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
-
-                            if (movieIdx > -1) {
-                                target.list.splice(movieIdx, 1);
-                            } else {
-                                target.list.push(Object.assign({}, movie));
-                            }
-                            saveFolders(fUpdate);
-                            
-                            item.selected = !item.selected;
-                            Lampa.Select.close();
-                            setTimeout(function(){
-                                Lampa.Select.show(params);
-                            }, 10);
-                        } else if (originalOnSelect) {
-                            originalOnSelect(item);
-                        }
-                    };
-                }
-            }
-        }
-        originalSelectShow.call(Lampa.Select, params);
-    };
 })();
