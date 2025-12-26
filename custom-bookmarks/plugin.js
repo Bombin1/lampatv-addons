@@ -19,14 +19,19 @@
         }
     }
 
-    // Стилі: Робимо папки схожими на картки фільмів, щоб вони вписалися в скрол
+    // Стилі для ТБ
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .card-folder { width: 140px !important; height: 90px !important; margin: 5px; position: relative; display: inline-block; vertical-align: top; } \
-            .card-folder__body { width: 100%; height: 100%; background: rgba(255,255,255,0.05); border-radius: 10px; border: 2px solid transparent; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: all 0.2s; } \
-            .card-folder.focus .card-folder__body { background: rgba(255,255,255,0.25) !important; border-color: #fff; transform: scale(1.05); } \
-            .card-folder__name { font-size: 12px; color: #fff; text-align: center; margin-top: 5px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; } \
-            .card-folder__icon { font-size: 24px; } \
+            .folders-line-fixed { width: 100%; display: block; padding: 15px 5px; position: relative; z-index: 10; } \
+            .folders-line-fixed__body { display: flex; flex-wrap: wrap; gap: 10px; padding-left: 15px; } \
+            .f-tile-tv { \
+                width: 100px; height: 60px; background: rgba(255,255,255,0.05); \
+                border-radius: 8px; border: 2px solid transparent; \
+                display: flex; flex-direction: column; justify-content: center; align-items: center; \
+                cursor: pointer; transition: 0.2s; \
+            } \
+            .f-tile-tv.focus { background: rgba(255,255,255,0.3) !important; border-color: #fff; transform: scale(1.05); } \
+            .f-tile-tv__name { font-size: 10px; color: #fff; margin-top: 2px; text-align: center; } \
         </style>');
     }
 
@@ -60,15 +65,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // Функція створення візуальної картки папки
-    function createFolderCard(title, icon, onClick, onLongClick) {
-        var card = $('<div class="card-folder selector" tabindex="0"><div class="card-folder__body"><div class="card-folder__icon">'+icon+'</div><div class="card-folder__name">'+title+'</div></div></div>');
-        card.on('hover:enter', onClick);
-        if (onLongClick) card.on('hover:long', onLongClick);
-        return card;
-    }
-
-    // ПЕРЕХОПЛЕННЯ КОМПОНЕНТА "BOOKMARKS"
+    // ОСНОВНА ЛОГІКА
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -79,52 +76,63 @@
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
-                    var container = view.find('.category-full').first();
                     
-                    if (container.length) {
-                        var folders = getFolders();
-                        
-                        // Додаємо кнопку створення
-                        var btnCreate = createFolderCard('Створити', '+', function() {
-                            Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
-                                if (name) {
-                                    var f = getFolders(); f.push({ name: name, list: [] });
-                                    saveFolders(f); Lampa.Activity.replace();
-                                }
-                            });
-                        });
-                        container.prepend(btnCreate);
+                    // Чекаємо появи скролу
+                    var check = setInterval(function(){
+                        var scrollContent = view.find('.scroll__content');
+                        if (scrollContent.length) {
+                            clearInterval(check);
+                            if (scrollContent.find('.folders-line-fixed').length) return;
 
-                        // Додаємо папки
-                        folders.slice().reverse().forEach(function(f, i) {
-                            var btnFolder = createFolderCard(f.name, '📁', function() {
-                                Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
-                            }, function() {
-                                Lampa.Select.show({
-                                    title: f.name,
-                                    items: [{ title: 'Видалити' }],
-                                    onSelect: function() {
-                                        var fl = getFolders();
-                                        // Знаходимо правильний індекс (бо ми робили reverse)
-                                        var realIdx = fl.findIndex(function(folder) { return folder.name === f.name; });
-                                        if (realIdx > -1) fl.splice(realIdx, 1);
-                                        saveFolders(fl); Lampa.Activity.replace();
+                            var folders = getFolders();
+                            var line = $('<div class="folders-line-fixed"><div class="folders-line-fixed__body"></div></div>');
+                            var body = line.find('.folders-line-fixed__body');
+
+                            var addTile = function(title, icon, action, long) {
+                                var tile = $('<div class="f-tile-tv selector" tabindex="0"><div>'+icon+'</div><div class="f-tile-tv__name">'+title+'</div></div>');
+                                tile.on('hover:enter', action);
+                                if (long) tile.on('hover:long', long);
+                                body.append(tile);
+                            };
+
+                            addTile('Створити', '+', function() {
+                                Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                                    if (name) {
+                                        var f = getFolders(); f.push({ name: name, list: [] });
+                                        saveFolders(f); Lampa.Activity.replace();
                                     }
                                 });
                             });
-                            container.prepend(btnFolder);
-                        });
-                    }
+
+                            folders.forEach(function(f, i) {
+                                addTile(f.name, '📁', function() {
+                                    Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
+                                }, function() {
+                                    Lampa.Select.show({
+                                        title: f.name,
+                                        items: [{ title: 'Видалити' }],
+                                        onSelect: function() {
+                                            var fl = getFolders(); fl.splice(i, 1);
+                                            saveFolders(fl); Lampa.Activity.replace();
+                                        }
+                                    });
+                                });
+                            });
+
+                            scrollContent.prepend(line);
+                            Lampa.Controller.collectionSet(view);
+                        }
+                    }, 100);
 
                     var originalStart = comp.start;
                     comp.start = function() {
-                        // Обов'язково реєструємо view в контролері ПЕРЕД стартом
-                        Lampa.Controller.collectionSet(view);
                         originalStart.call(comp);
-                        
-                        // Примусово фокусуємо першу плитку, якщо вона є
-                        var first = view.find('.card-folder').first()[0];
-                        if (first) Lampa.Controller.collectionFocus(first);
+                        // Окремий таймаут для фокусу на ТБ
+                        setTimeout(function(){
+                            Lampa.Controller.collectionSet(view);
+                            var first = view.find('.f-tile-tv').first()[0];
+                            if (first) Lampa.Controller.collectionFocus(first);
+                        }, 300);
                     };
 
                     return view;
@@ -134,7 +142,7 @@
         }
     });
 
-    // Меню вибору в картці фільму (без змін, воно стабільне)
+    // Меню вибору
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
