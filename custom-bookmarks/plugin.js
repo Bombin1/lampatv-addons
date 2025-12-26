@@ -20,28 +20,28 @@
         }
     }
 
-    // Стилі: використовуємо відносну позицію, щоб папки штовхали контент вниз
+    // СТИЛІ: Фіксуємо проблему накладання через display: block
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .bookmarks-custom-wrapper { position: relative; display: block; width: 100%; padding: 15px; box-sizing: border-box; z-index: 10; } \
-            .folders-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; } \
+            .bookmarks-folders-row { display: block; width: 100%; padding: 10px 15px; position: relative; clear: both; box-sizing: border-box; } \
+            .folders-list-inner { display: flex; flex-wrap: wrap; gap: 10px; } \
             .folder-tile { \
                 background-color: rgba(0, 0, 0, 0.3) !important; \
                 width: 100px; height: 70px; border-radius: 8px; \
                 display: flex; flex-direction: column; justify-content: center; align-items: center; \
                 cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.1); \
-                transition: transform 0.2s; \
+                box-sizing: border-box; \
             } \
-            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); border-color: #fff; } \
-            .folder-tile__name { font-size: 0.8em; color: #fff; text-align: center; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; } \
+            .folder-tile.focus { background-color: #fff !important; border: 1px solid #fff; transform: scale(1.05); z-index: 10; } \
+            .folder-tile__name { font-size: 0.8em; color: #fff; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 90%; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
-            .folder-tile__icon { font-size: 1.5em; margin-bottom: 2px; } \
-            /* Корекція стандартного списку Lampa, щоб він не залізав під папки */ \
-            .category-full, .bookmarks-list { position: relative !important; top: 0 !important; } \
+            .folder-tile__icon { font-size: 1.4em; margin-bottom: 2px; } \
+            /* Забороняємо стандартному списку накладатись */ \
+            .category-full, .bookmarks-list { position: relative !important; top: 0 !important; margin-top: 10px; } \
         </style>');
     }
 
-    // Компонент папки
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -83,31 +83,37 @@
                     var view = originalRender.call(comp);
                     var folders = getFolders();
                     
-                    // Знаходимо контейнер прокрутки
-                    var scroll = view.find('.scroll__content');
-                    if (scroll.length) {
-                        var wrapper = $('<div class="bookmarks-custom-wrapper"><div class="folders-grid"></div></div>');
-                        var grid = wrapper.find('.folders-grid');
+                    // Шукаємо правильний контейнер всередині скролу
+                    var body = view.find('.category-full, .bookmarks-list, .scroll__content').first();
+                    
+                    if (body.length) {
+                        var row = $('<div class="bookmarks-folders-row"><div class="folders-list-inner"></div></div>');
+                        var list = row.find('.folders-list-inner');
+
+                        // Функція створення кнопки
+                        var createTile = function(title, icon, action, longAction) {
+                            var tile = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">'+icon+'</div><div class="folder-tile__name">'+title+'</div></div>');
+                            // Використовуємо універсальний обробник для ТБ
+                            tile.on('click', action);
+                            if (longAction) tile.on('hover:long', longAction);
+                            return tile;
+                        };
 
                         // Кнопка Створити
-                        var createBtn = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">+</div><div class="folder-tile__name">Створити</div></div>');
-                        createBtn.on('click', function() {
+                        list.append(createTile('Створити', '+', function() {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
                                     var f = getFolders(); f.push({ name: name, list: [] });
                                     saveFolders(f); Lampa.Activity.replace();
                                 }
                             });
-                        });
-                        grid.append(createBtn);
+                        }));
 
                         // Папки
                         folders.forEach(function(f, i) {
-                            var tile = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">📁</div><div class="folder-tile__name">'+f.name+' ('+f.list.length+')</div></div>');
-                            tile.on('click', function() {
+                            list.append(createTile(f.name + ' ('+f.list.length+')', '📁', function() {
                                 Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
-                            });
-                            tile.on('hover:long', function() {
+                            }, function() {
                                 Lampa.Select.show({
                                     title: f.name,
                                     items: [{ title: 'Видалити папку' }],
@@ -116,19 +122,17 @@
                                         saveFolders(fList); Lampa.Activity.replace();
                                     }
                                 });
-                            });
-                            grid.append(tile);
+                            }));
                         });
 
-                        // Додаємо папки НА ПОЧАТОК списку
-                        scroll.prepend(wrapper);
+                        body.prepend(row);
                     }
 
-                    // Оновлюємо навігацію після рендеру
+                    // Оновлюємо контролер
                     var originalStart = comp.start;
                     comp.start = function() {
                         originalStart.call(comp);
-                        // Змушуємо контролер побачити і наші папки, і стандартні фільми як єдине ціле
+                        // Повторна реєстрація селекторів для пульта
                         Lampa.Controller.collectionSet(view);
                     };
 
@@ -139,7 +143,7 @@
         }
     });
 
-    // Меню додавання в папку
+    // Меню вибору (додавання)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
