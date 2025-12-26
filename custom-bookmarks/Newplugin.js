@@ -19,18 +19,20 @@
         }
     }
 
-    // ОНОВЛЕНО: ПРОЗОРІСТЬ 25%, ШРИФТ ЛІЧИЛЬНИКА +15%
+    // ОНОВЛЕНО: ПРОЗОРІСТЬ 15%, ВИРІВНЮВАННЯ ПО ЦЕНТРУ ЗЛІВА
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(21, 24, 29, 0.25) !important; \
+                background-color: rgba(21, 24, 29, 0.15) !important; \
                 width: 100px; \
                 height: 72px; \
                 border-radius: 10px; \
-                display: flex; flex-direction: column; justify-content: space-between; \
-                padding: 10px 8px 6px 8px; \
+                display: flex; flex-direction: column; \
+                justify-content: center; \
+                align-items: flex-start; \
+                padding: 0 10px; \
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
@@ -40,19 +42,20 @@
             } \
             .folder-tile__name { \
                 font-size: 1.2em; font-weight: 500; color: #fff; \
-                white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; \
+                white-space: nowrap; text-overflow: ellipsis; overflow: hidden; \
+                width: 100%; margin-bottom: 2px; \
             } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
-            .folder-tile__count { font-size: 2.1em; font-weight: 500; color: #fff; line-height: 0.9; } \
+            .folder-tile__count { font-size: 2.1em; font-weight: 500; color: #fff; line-height: 1; } \
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
             .folder-tile--create { \
-                background-color: rgba(21, 24, 29, 0.25) !important; \
+                background-color: rgba(21, 24, 29, 0.15) !important; \
                 border: 1px dashed rgba(255, 255, 255, 0.15); \
-                justify-content: center; align-items: center; padding: 8px; \
+                align-items: center; padding: 0; \
             } \
-            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; white-space: normal; } \
+            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; margin: 0; } \
         </style>');
     }
 
