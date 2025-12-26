@@ -16,15 +16,15 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // СТИЛІ (Розмір зменшено ще на 1/7 від попереднього)
+    // СТИЛІ (Розмір зменшено ще на 1/7)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 6px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 5px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
                 background: rgba(255, 255, 255, 0.07); \
-                width: 85px; height: 48px; \
-                border-radius: 6px; \
+                width: 73px; height: 41px; \
+                border-radius: 5px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
@@ -33,8 +33,8 @@
                 background: #fff !important; color: #000 !important; \
                 transform: scale(1.05); \
             } \
-            .folder-tile__name { font-size: 0.7em; font-weight: 500; text-align: center; padding: 0 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
-            .folder-tile__count { font-size: 0.55em; opacity: 0.5; margin-top: 1px; } \
+            .folder-tile__name { font-size: 0.65em; font-weight: 500; text-align: center; padding: 0 3px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
+            .folder-tile__count { font-size: 0.5em; opacity: 0.5; margin-top: 1px; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
         </style>');
     }
@@ -99,7 +99,7 @@
         };
     });
 
-    // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ (ПАПКИ)
+    // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -152,7 +152,7 @@
         }
     });
 
-    // 3. МЕНЮ ДОДАВАННЯ/ВИДАЛЕННЯ З ГАЛОЧКАМИ
+    // 3. МЕНЮ З ГАЛОЧКАМИ (check: true)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -172,7 +172,7 @@
                         title: f.name, 
                         is_custom: true, 
                         f_idx: i,
-                        ghost: !exists // Показує галочку, якщо фільм уже є
+                        check: exists // ОСЬ ЦЕ ВКЛЮЧАЄ ГАЛОЧКУ
                     });
                 });
 
@@ -184,16 +184,17 @@
                         var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
                         if (movieIdx > -1) {
-                            // Якщо є — видаляємо
                             target.list.splice(movieIdx, 1);
                         } else {
-                            // Якщо немає — додаємо
                             target.list.push(Object.assign({}, movie));
                         }
                         saveFolders(fUpdate);
                         
-                        // Оновлюємо меню, щоб галочка перемкнулася
-                        Lampa.Select.show(params); 
+                        // Закриваємо поточне меню і відкриваємо знову для оновлення галочок
+                        Lampa.Select.close();
+                        setTimeout(function(){
+                            Lampa.Select.show(params);
+                        }, 10);
                     } else if (originalOnSelect) {
                         originalOnSelect(item);
                     }
