@@ -19,28 +19,28 @@
         }
     }
 
-    // Стилі: 100px, 30% прозорість фокусу
+    // Стилі: фіксуємо розміри та прозорість
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .folders-list-wrapper { width: 100%; padding: 15px 0; margin-bottom: 10px; display: block; clear: both; } \
-            .folders-list-wrapper__items { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
-            .folder-tile-item { \
-                width: 100px; height: 65px; \
+            .custom-folders-wrap { width: 100%; padding: 15px 0; display: block; clear: both; position: relative; } \
+            .custom-folders-wrap__list { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
+            .f-tile { \
+                width: 100px; height: 60px; \
                 background-color: rgba(255, 255, 255, 0.05) !important; \
                 border-radius: 8px; border: 2px solid transparent; \
                 display: flex; flex-direction: column; justify-content: center; align-items: center; \
                 cursor: pointer; box-sizing: border-box; \
             } \
-            .folder-tile-item.focus { \
+            .f-tile.focus { \
                 background-color: rgba(255, 255, 255, 0.3) !important; \
                 border-color: #fff; transform: scale(1.05); \
             } \
-            .folder-tile-item__name { font-size: 11px; color: #fff; text-align: center; margin-top: 3px; overflow: hidden; white-space: nowrap; width: 90%; } \
-            .folder-tile-item__icon { font-size: 16px; } \
+            .f-tile__name { font-size: 10px; color: #fff; text-align: center; margin-top: 2px; overflow: hidden; white-space: nowrap; width: 90%; } \
+            .f-tile__icon { font-size: 14px; } \
         </style>');
     }
 
-    // Компонент перегляду вмісту папки
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -81,24 +81,23 @@
                 comp.render = function () {
                     var view = originalRender.call(comp);
                     
-                    // ГАРАНТІЯ ОДНОРАЗОВОСТІ: додаємо лише якщо ще немає на сторінці
-                    if (view.find('.folders-list-wrapper').length) return view;
+                    // КЛЮЧОВИЙ ФІКС: Шукаємо лише ПЕРШИЙ scroll__content на сторінці
+                    // і перевіряємо, чи ми вже не додали туди папки
+                    var mainScroll = view.find('.scroll__content').first();
+                    
+                    if (mainScroll.length && !mainScroll.find('.custom-folders-wrap').length) {
+                        var folders = getFolders();
+                        var wrap = $('<div class="custom-folders-wrap"><div class="custom-folders-wrap__list"></div></div>');
+                        var list = wrap.find('.custom-folders-wrap__list');
 
-                    var folders = getFolders();
-                    var container = view.find('.scroll__content');
-
-                    if (container.length) {
-                        var wrapper = $('<div class="folders-list-wrapper"><div class="folders-list-wrapper__items"></div></div>');
-                        var list = wrapper.find('.folders-list-wrapper__items');
-
-                        var addTile = function(title, icon, action, long) {
-                            var tile = $('<div class="folder-tile-item selector" tabindex="0"><div class="folder-tile-item__icon">'+icon+'</div><div class="folder-tile-item__name">'+title+'</div></div>');
+                        var add = function(name, icon, action, long) {
+                            var tile = $('<div class="f-tile selector" tabindex="0"><div class="f-tile__icon">'+icon+'</div><div class="f-tile__name">'+name+'</div></div>');
                             tile.on('hover:enter', action);
                             if (long) tile.on('hover:long', long);
                             list.append(tile);
                         };
 
-                        addTile('Створити', '+', function() {
+                        add('Створити', '+', function() {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
                                     var f = getFolders(); f.push({ name: name, list: [] });
@@ -108,7 +107,7 @@
                         });
 
                         folders.forEach(function(f, i) {
-                            addTile(f.name, '📁', function() {
+                            add(f.name, '📁', function() {
                                 Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
                             }, function() {
                                 Lampa.Select.show({
@@ -122,20 +121,14 @@
                             });
                         });
 
-                        container.prepend(wrapper);
+                        mainScroll.prepend(wrap);
                     }
 
-                    // БЕЗПЕЧНА НАВІГАЦІЯ
+                    // Стандартний запуск без втручання в контролер
                     var originalStart = comp.start;
                     comp.start = function() {
-                        // Оновлюємо список елементів для пульта
                         Lampa.Controller.collectionSet(view);
-                        // Запускаємо стандартний старт Lampa
                         originalStart.call(comp);
-                        
-                        // Якщо ми на початку сторінки - фокусуємось на папках
-                        var first = view.find('.folder-tile-item').first()[0];
-                        if (first) Lampa.Controller.collectionFocus(first);
                     };
 
                     return view;
@@ -145,7 +138,7 @@
         }
     });
 
-    // Меню вибору (додавання в папки)
+    // Меню вибору (додавання)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
