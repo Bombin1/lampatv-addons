@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Плитки + фікс відображення іконок)
+    // 2. СТИЛІ (Плитки + Малювання квадратика через CSS)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,11 +39,33 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            /* Фікс для відображення в меню */ \
-            .custom-item-render { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 2em; color: #fff; } \
-            .custom-item-render span { font-size: 1.2em; } \
-            .custom-item-render i { font-size: 1.4em; color: #fff; } \
-            .focus .custom-item-render, .focus .custom-item-render i, .focus .custom-item-render span { color: #000 !important; } \
+            \
+            /* Стиль рядка в меню */ \
+            .custom-render-row { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 2.5em; padding: 0 5px; } \
+            .custom-render-row span { font-size: 1.1em; color: #fff; } \
+            .focus .custom-render-row span { color: #000; } \
+            \
+            /* Малювання квадратика */ \
+            .custom-check-box { \
+                width: 1.2em; height: 1.2em; \
+                border: 2px solid rgba(255,255,255,0.5); \
+                border-radius: 3px; \
+                position: relative; \
+                flex-shrink: 0; \
+            } \
+            .focus .custom-check-box { border-color: #000; } \
+            \
+            /* Галочка всередині */ \
+            .custom-check-box--active { background: rgba(255,255,255,0.2); border-color: #fff; } \
+            .custom-check-box--active:after { \
+                content: "✓"; \
+                position: absolute; \
+                top: 50%; left: 50%; \
+                transform: translate(-50%, -50%); \
+                color: #fff; font-size: 0.9em; font-weight: bold; \
+            } \
+            .focus .custom-check-box--active { background: rgba(0,0,0,0.1); border-color: #000; } \
+            .focus .custom-check-box--active:after { color: #000; } \
         </style>');
     }
 
@@ -102,7 +124,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ВИПРАВЛЕНО ВІДОБРАЖЕННЯ
+    // 4. МЕНЮ "ВИБРАНЕ" - ЧИСТИЙ CSS КВАДРАТ ТА БЕЗ ЗАГОЛОВКА
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -110,25 +132,27 @@
         });
 
         if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
-            if (!params.items.some(function(i) { return i.is_custom_header; })) {
+            if (!params.items.some(function(i) { return i.is_custom_item; })) {
                 var folders = getFolders();
                 var active = Lampa.Activity.active();
                 var movie = active.card || active.data;
 
                 if (folders.length > 0 && movie) {
                     var customItems = [];
-                    customItems.push({ title: 'ПАПКИ', separator: true, is_custom_header: true });
+                    // ПРИБРАНО ЗАГОЛОВОК "ПАПКИ"
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
-                        var opacity = exists ? '1' : '0.4';
+                        var checkClass = exists ? 'custom-check-box custom-check-box--active' : 'custom-check-box';
+                        var opacity = exists ? '1' : '0.5';
                         
                         customItems.push({ 
-                            // Використовуємо контейнер з явним кольором та розміром
                             title: f.name,
-                            html: '<div class="custom-item-render" style="opacity: '+opacity+'"><span>'+f.name+'</span><i class="'+iconClass+'"></i></div>',
-                            is_custom: true, 
+                            html: '<div class="custom-render-row" style="opacity: '+opacity+'"> \
+                                     <span>'+f.name+'</span> \
+                                     <div class="'+checkClass+'"></div> \
+                                   </div>',
+                            is_custom_item: true, 
                             f_idx: i
                         });
                     });
@@ -137,7 +161,7 @@
 
                     var originalOnSelect = params.onSelect;
                     params.onSelect = function (item) {
-                        if (item.is_custom) {
+                        if (item.is_custom_item) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
                             var movieIdx = -1;
@@ -147,10 +171,10 @@
 
                             if (movieIdx > -1) {
                                 target.list.splice(movieIdx, 1);
-                                Lampa.Noty.show('Видалено з ' + target.name);
+                                // ПРИБРАНО СПОВІЩЕННЯ
                             } else {
                                 target.list.push(JSON.parse(JSON.stringify(movie)));
-                                Lampa.Noty.show('Додано в ' + target.name);
+                                // ПРИБРАНО СПОВІЩЕННЯ
                             }
                             
                             saveFolders(fUpdate);
