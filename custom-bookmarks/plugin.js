@@ -15,9 +15,11 @@
     }
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
-        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
-            window.Lampa.Cloud.set(STORAGE_KEY, folders);
-            if (window.Lampa.Cloud.sync) window.Lampa.Cloud.sync();
+        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account && window.Lampa.Account.logged()) {
+            try {
+                window.Lampa.Cloud.set(STORAGE_KEY, folders);
+                if (window.Lampa.Cloud.sync) window.Lampa.Cloud.sync();
+            } catch (e) {}
         }
     }
 
@@ -46,6 +48,8 @@
         .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000;} \
         .folder-tile--create { border: 1px dashed rgba(255,255,255,0.15); align-items: center; padding: 0;} \
         .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; margin: 0;} \
+        .folder-actions { position: absolute; right: 6px; top: 6px; display: flex; gap: 6px; } \
+        .folder-action { width: 18px; height: 18px; opacity: 0.7; } \
         </style>');
     }
 
@@ -115,7 +119,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- Меню вибору ---
+    // --- Меню вибору (інтеграція з Вибране) ---
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function (i) {
@@ -151,7 +155,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // --- Інтеграція та фікс пульта ---
+    // --- Інтеграція та фікс пульта у компоненті bookmarks ---
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -164,7 +168,7 @@
                     var container = view.find('.category-full, .bookmarks-list, .scroll__content').first();
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
-                        var createBtn = $('<div class="folder-tile folder-tile--create selector" data-name="folder"><div class="folder-tile__name">Створити</div></div>');
+                        var createBtn = $('<div class="folder-tile folder-tile--create selector" data-name="folder" data-index="-1"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('hover:enter', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
@@ -178,7 +182,89 @@
                         wrapper.append(createBtn);
 
                         folders.forEach(function (folder, i) {
-                            var tile = $('<div class="folder-tile selector" data-name="folder" data-index="' + i + '"> \
-                                <div class="folder-tile__name">' + folder.name + '</div> \
-                                <div class="folder-tile__count_wrap"> \
-                                    <span class="folder
+                            var tile = $(
+                                '<div class="folder-tile selector" data-name="folder" data-index="' + i + '">' +
+                                    '<div class="folder-tile__name">' + Lampa.Utils.htmlEncode(folder.name) + '</div>' +
+                                    '<div class="folder-tile__count_wrap">' +
+                                        '<span class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + '</span>' +
+                                        '<span class="folder-tile__total">шт.</span>' +
+                                    '</div>' +
+                                '</div>'
+                            );
+
+                            // дії при натисканні
+                            tile.on('hover:enter', function () {
+                                Lampa.Activity.push({
+                                    component: 'custom_folder_component',
+                                    id: 'custom_folder_' + i,
+                                    items: folder.list || [],
+                                    title: folder.name
+                                });
+                            });
+
+                            // контекстне меню: перейменувати / видалити
+                            tile.on('hover:long', function () {
+                                Lampa.Select.show({
+                                    title: folder.name,
+                                    items: [
+                                        { title: 'Відкрити', id: 'open' },
+                                        { title: 'Перейменувати', id: 'rename' },
+                                        { title: 'Видалити', id: 'delete' }
+                                    ],
+                                    onSelect: function (item) {
+                                        if (item.id === 'open') {
+                                            tile.trigger('hover:enter');
+                                        } else if (item.id === 'rename') {
+                                            Lampa.Input.edit({ value: folder.name, title: 'Нова назва' }, function (name) {
+                                                if (name) {
+                                                    var f = getFolders();
+                                                    f[i].name = name;
+                                                    saveFolders(f);
+                                                    Lampa.Activity.replace();
+                                                }
+                                            });
+                                        } else if (item.id === 'delete') {
+                                            var f = getFolders();
+                                            f.splice(i, 1);
+                                            saveFolders(f);
+                                            Lampa.Activity.replace();
+                                        }
+                                    }
+                                });
+                            });
+
+                            wrapper.append(tile);
+                        });
+
+                        container.prepend(wrapper);
+
+                        // --- Додано: реєстрація контролера для пульта ---
+                        try {
+                            Lampa.Controller.add('folders', {
+                                toggle: function () {
+                                    Lampa.Controller.collectionSet(wrapper, wrapper.find('.selector'));
+                                    var first = wrapper.find('.selector').eq(0);
+                                    Lampa.Controller.collectionFocus(first.length ? first : wrapper.find('.selector').eq(0), wrapper);
+                                },
+                                left: function () { Lampa.Navigator.move('left'); },
+                                right: function () { Lampa.Navigator.move('right'); },
+                                up: function () { Lampa.Navigator.move('up'); },
+                                down: function () { Lampa.Navigator.move('down'); },
+                                back: function () { Lampa.Controller.toggle('content'); }
+                            });
+                            // якщо зараз активна сторінка bookmarks — переключаємося на наш контролер
+                            if (Lampa.Activity.active() && Lampa.Activity.active().component === 'bookmarks') {
+                                Lampa.Controller.toggle('folders');
+                            }
+                        } catch (e) {
+                            // якщо Controller відсутній або інша помилка — нічого не робимо
+                        }
+                    }
+                    return view;
+                };
+                return comp;
+            });
+        }
+    });
+
+})();
