@@ -20,16 +20,6 @@
         }
     }
 
-    function loadFromCloud() {
-        if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
-            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
-                if (data && Array.isArray(data)) {
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                }
-            });
-        }
-    }
-
     // 2. СТИЛІ (ВАШ ОРИГІНАЛ)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
@@ -119,7 +109,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ВГОРУ І З КВАДРАТИКАМИ
+    // 4. МЕНЮ "ВИБРАНЕ" - ВИПРАВЛЕНА ЛОГІКА КВАДРАТІВ ТА КОЛЬОРУ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -142,14 +132,14 @@
                             title: f.name, 
                             is_custom: true, 
                             f_idx: i,
-                            // ghost: true робить квадрат порожнім, якщо selected: false
-                            // selected: true малює галочку в квадраті
-                            ghost: true,
-                            selected: exists 
+                            // checked: true -> квадрат з галочкою
+                            // checked: false -> порожній квадрат
+                            checked: exists,
+                            // Колір: білий якщо в списку, сірий (opacity) якщо ні
+                            style: exists ? '' : 'opacity: 0.5;'
                         });
                     });
 
-                    // Ваші папки йдуть ПЕРШИМИ
                     params.items = customItems.concat(params.items);
 
                     var originalOnSelect = params.onSelect;
@@ -164,7 +154,6 @@
                             
                             saveFolders(fUpdate);
                             
-                            // Закриваємо і відкриваємо для оновлення візуалу
                             Lampa.Select.close();
                             setTimeout(function(){
                                 Lampa.Select.show(params);
@@ -182,7 +171,6 @@
     // 5. ІНТЕГРАЦІЯ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
-            loadFromCloud();
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
