@@ -5,7 +5,6 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // 1. Робота з базою даних
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -17,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // 2. Оновлені стилі (вигляд як у стокових папок Lampa)
+    // Оновлені стилі (вигляд як стокові папки)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
@@ -28,39 +27,35 @@
                 border-radius: 10px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
-                overflow: hidden; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { \
-                background: #fff !important; \
-                color: #000 !important; \
-                transform: scale(1.05); \
-                box-shadow: 0 10px 20px rgba(0,0,0,0.4); \
+                background: #fff !important; color: #000 !important; \
+                transform: scale(1.05); box-shadow: 0 10px 20px rgba(0,0,0,0.4); \
             } \
-            .folder-tile__name { \
-                font-size: 0.9em; \
-                font-weight: 500; \
-                text-align: center; \
-                padding: 0 8px; \
-                white-space: nowrap; \
-                text-overflow: ellipsis; \
-                overflow: hidden; \
-                width: 100%; \
-            } \
-            .folder-tile__count { \
-                font-size: 0.7em; \
-                opacity: 0.5; \
-                margin-top: 4px; \
-            } \
-            .folder-tile--create { \
-                border: 2px dashed rgba(255, 255, 255, 0.15); \
-                background: transparent; \
-            } \
-            .folder-tile--create.focus { border-color: #fff; } \
+            .folder-tile__name { font-size: 0.9em; font-weight: 500; text-align: center; padding: 0 8px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
+            .folder-tile__count { font-size: 0.7em; opacity: 0.5; margin-top: 4px; } \
+            .folder-tile--create { border: 2px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
         </style>');
     }
 
-    // 3. Інтеграція в розділ закладок
+    // ПЕРЕХОПЛЕННЯ КОМПОНЕНТА CATEGORY_FULL (це те, що ми робили не так)
+    var originalCategoryFull = Lampa.Component.get('category_full');
+    Lampa.Component.add('category_full', function (object) {
+        var comp = new originalCategoryFull(object);
+        
+        // Якщо це наша папка, ми підміняємо метод завантаження даних
+        if (object.is_custom_folder) {
+            comp.render = function () {
+                // Викликаємо оригінальний рендер, але з нашими даними
+                comp.build(object.items);
+                return comp.content();
+            };
+        }
+        return comp;
+    }, true);
+
+    // 1. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -76,7 +71,6 @@
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
                         
-                        // Кнопка створення нової папки
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
@@ -90,17 +84,16 @@
                         });
                         wrapper.append(createBtn);
 
-                        // Відображення списку папок
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // ПРАВИЛЬНЕ ВІДКРИТТЯ: як у референсі my_bookmarks.js
+                                // ПРАВИЛЬНИЙ ЗАПУСК: Передаємо прапорець і список через items
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
-                                    method: 'card',
-                                    card: folder.list || [], // Lampa очікує масив тут при методі card
+                                    is_custom_folder: true,
+                                    items: folder.list || [],
                                     page: 1
                                 });
                             });
@@ -108,17 +101,10 @@
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
-                                    items: [
-                                        { title: 'Очистити', action: 'clear' },
-                                        { title: 'Видалити папку', action: 'delete' }
-                                    ],
-                                    onSelect: function(item) {
+                                    items: [{ title: 'Видалити папку' }],
+                                    onSelect: function() {
                                         var f = getFolders();
-                                        if (item.action === 'delete') {
-                                            f.splice(i, 1);
-                                        } else {
-                                            f[i].list = [];
-                                        }
+                                        f.splice(i, 1);
                                         saveFolders(f);
                                         Lampa.Activity.replace();
                                     }
@@ -135,14 +121,14 @@
         }
     });
 
-    // 4. Додавання фільму в папки (Нормалізація даних)
+    // 2. ДОДАВАННЯ В ПАПКИ (НОРМАЛІЗАЦІЯ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
-        var isFavMenu = params && params.items && params.items.some(function(i) { 
+        var isFav = params && params.items && params.items.some(function(i) { 
             return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
         });
 
-        if (isFavMenu || (params.title && params.title.indexOf('Вибране') !== -1)) {
+        if (isFav || (params.title && params.title.indexOf('Вибране') !== -1)) {
             var folders = getFolders();
             var active = Lampa.Activity.active();
             var movie = active.card || active.data;
@@ -159,7 +145,6 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // НОРМАЛІЗАЦІЯ КАРТКИ (важливо для відображення!)
                         var cleanCard = {
                             id: movie.id,
                             title: movie.title || movie.name,
@@ -167,7 +152,6 @@
                             release_date: movie.release_date || movie.first_air_date,
                             poster_path: movie.poster_path || movie.poster,
                             img: movie.img || movie.poster_path || movie.poster,
-                            background_image: movie.background_image || movie.backdrop_path,
                             type: movie.type || (movie.name ? 'tv' : 'movie'),
                             vote_average: movie.vote_average
                         };
