@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Стилі папок (дизайн Lampa)
+    // Стилі папок (дизайн як у стокових)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
@@ -39,28 +39,7 @@
         </style>');
     }
 
-    // 1. СТВОРЮЄМО ВЛАСНИЙ КОМПОНЕНТ ДЛЯ ПЕРЕГЛЯДУ ПАПКИ
-    Lampa.Component.add('custom_folder_view', function (object) {
-        var comp = new Lampa.Component.get('category_full')(object);
-        
-        comp.create = function () {
-            // Підміняємо дані для побудови списку
-            this.build({
-                results: object.items || [],
-                total_pages: 1,
-                page: 1
-            });
-            
-            return this.render();
-        };
-
-        // Перевизначаємо метод завантаження сторінок, щоб він нічого не шукав у мережі
-        comp.next = function () {};
-        
-        return comp;
-    });
-
-    // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
+    // 1. ІНТЕГРАЦІЯ В РОЗДІЛ ЗАКЛАДОК
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -93,10 +72,12 @@
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
+                                // Прямий запуск через category_full як у референсі
                                 Lampa.Activity.push({
                                     title: folder.name,
-                                    component: 'custom_folder_view', // Викликаємо наш новий компонент
-                                    items: folder.list || [],
+                                    component: 'category_full',
+                                    method: 'card', // Цей метод змушує Lampa шукати дані в полі card
+                                    card: folder.list || [], 
                                     page: 1
                                 });
                             });
@@ -104,7 +85,7 @@
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
-                                    items: [{ title: 'Видалити папку' }],
+                                    items: [{ title: 'Видалити папку', action: 'delete' }],
                                     onSelect: function() {
                                         var f = getFolders();
                                         f.splice(i, 1);
@@ -124,7 +105,7 @@
         }
     });
 
-    // 3. ДОДАВАННЯ (НОРМАЛІЗАЦІЯ ДАНИХ)
+    // 2. ДОДАВАННЯ В ПАПКИ (З НОРМАЛІЗАЦІЄЮ ДАНИХ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { 
@@ -148,9 +129,20 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        if (!target.list.some(function(m) { return m.id == movie.id; })) {
-                            var movieToSave = JSON.parse(JSON.stringify(movie));
-                            target.list.push(movieToSave);
+                        // НОРМАЛІЗАЦІЯ (важливо для рендеру)
+                        var cleanCard = {
+                            id: movie.id,
+                            title: movie.title || movie.name,
+                            original_title: movie.original_title || movie.original_name,
+                            release_date: movie.release_date || movie.first_air_date,
+                            poster_path: movie.poster_path || movie.poster,
+                            img: movie.img || movie.poster_path || movie.poster,
+                            type: movie.type || (movie.name ? 'tv' : 'movie'),
+                            vote_average: movie.vote_average
+                        };
+                        
+                        if (!target.list.some(function(m) { return m.id == cleanCard.id; })) {
+                            target.list.push(cleanCard);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
