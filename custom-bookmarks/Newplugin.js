@@ -25,7 +25,7 @@
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(0, 0, 0, 0.80) !important; \
+                background-color: rgba(0, 0, 0, 0.40) !important; \
                 width: 100px; \
                 height: 75px; \
                 border-radius: 10px; \
