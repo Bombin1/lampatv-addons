@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Плитки + Копія системного квадратика)
+    // 2. СТИЛІ (Для плиток та вирівнювання тексту)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -40,39 +40,10 @@
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
             \
-            /* Стиль рядка в меню */ \
-            .custom-render-row { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 2.8em; padding: 0 4px; } \
-            .custom-render-row span { font-size: 1.1em; color: #fff; } \
-            .focus .custom-render-row span { color: #000; } \
-            \
-            /* Системний квадратик Lampa на CSS */ \
-            .lampa-style-check { \
-                width: 1.3em; height: 1.3em; \
-                border: 2px solid rgba(255,255,255,0.2); \
-                border-radius: 4px; \
-                position: relative; \
-                flex-shrink: 0; \
-                margin-left: 15px; \
-                transition: all 0.1s ease; \
-            } \
-            /* Коли вибрано (як "Закладки") */ \
-            .lampa-style-check--active { \
-                border-color: #fff; \
-                background: rgba(255,255,255,0.05); \
-            } \
-            .lampa-style-check--active:after { \
-                content: ""; \
-                position: absolute; \
-                left: 0.35em; top: 0.1em; \
-                width: 0.4em; height: 0.75em; \
-                border: solid #fff; \
-                border-width: 0 2.5px 2.5px 0; \
-                transform: rotate(45deg); \
-            } \
-            /* Стан фокусу */ \
-            .focus .lampa-style-check { border-color: rgba(0,0,0,0.3); } \
-            .focus .lampa-style-check--active { border-color: #000; } \
-            .focus .lampa-style-check--active:after { border-color: #000; } \
+            /* Рядок меню */ \
+            .custom-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 5px 0; } \
+            .custom-row span { font-size: 1.1em; } \
+            .custom-row b { font-size: 1.4em; font-weight: normal; margin-left: 10px; } \
         </style>');
     }
 
@@ -131,7 +102,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ ВИБОРУ
+    // 4. МЕНЮ ВИБОРУ (UNICODE ВЕРСІЯ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -149,15 +120,16 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        var checkClass = exists ? 'lampa-style-check lampa-style-check--active' : 'lampa-style-check';
-                        var textOpacity = exists ? '1' : '0.6';
+                        
+                        // Використовуємо символи: 
+                        // ☐ (U+2610) - порожній квадрат
+                        // ☑ (U+2611) - квадрат з галочкою
+                        var icon = exists ? '☑' : '☐';
+                        var opacity = exists ? '1' : '0.5';
                         
                         customItems.push({ 
                             title: f.name,
-                            html: '<div class="custom-render-row" style="opacity: '+textOpacity+'"> \
-                                     <span>'+f.name+'</span> \
-                                     <div class="'+checkClass+'"></div> \
-                                   </div>',
+                            html: '<div class="custom-row" style="opacity: '+opacity+'"><span>'+f.name+'</span><b>'+icon+'</b></div>',
                             is_custom_item: true, 
                             f_idx: i
                         });
