@@ -19,30 +19,16 @@
         }
     }
 
-    // Стилі: папки тепер є частиною потоку (не фіксовані)
+    // Стилі: Тільки мінімум для плиток
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .folders-row-tv { width: 100%; padding: 10px 0; display: block; clear: both; background: none; } \
-            .folders-row-tv__body { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
-            .f-tile-tv { \
-                width: 100px; height: 60px; \
-                background-color: rgba(255, 255, 255, 0.05) !important; \
-                border-radius: 8px; border: 2px solid transparent; \
-                display: flex; flex-direction: column; justify-content: center; align-items: center; \
-                cursor: pointer; box-sizing: border-box; \
-            } \
-            .f-tile-tv.focus { \
-                background-color: rgba(255, 255, 255, 0.3) !important; \
-                border-color: #fff; transform: scale(1.05); \
-            } \
-            .f-tile-tv__name { font-size: 10px; color: #fff; text-align: center; margin-top: 2px; overflow: hidden; white-space: nowrap; width: 90%; } \
-            .f-tile-tv__icon { font-size: 14px; } \
-            /* Прибираємо накладання */ \
-            .scroll__content { position: relative; } \
+            .f-item { width: 100px; height: 60px; background: rgba(255,255,255,0.05); border-radius: 8px; border: 2px solid transparent; display: inline-flex; flex-direction: column; justify-content: center; align-items: center; margin: 5px; vertical-align: top; } \
+            .f-item.focus { background: rgba(255,255,255,0.3) !important; border-color: #fff; transform: scale(1.05); } \
+            .f-item__name { font-size: 10px; color: #fff; text-align: center; } \
         </style>');
     }
 
-    // Компонент папки
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -72,6 +58,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
+    // ІН'ЄКЦІЯ В РЕНДЕР
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -82,61 +69,47 @@
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
-                    
-                    // ДОДАЄМО ПАПКИ ЯК ПЕРШИЙ ЕЛЕМЕНТ ВСЕРЕДИНУ СКРОЛУ
-                    // Використовуємо таймаут, щоб Lampa встигла сформувати структуру
-                    setTimeout(function(){
-                        var container = view.find('.scroll__content').first();
-                        if (container.length && !container.find('.folders-row-tv').length) {
-                            var folders = getFolders();
-                            var row = $('<div class="folders-row-tv"><div class="folders-row-tv__body"></div></div>');
-                            var body = row.find('.folders-row-tv__body');
+                    var container = view.find('.category-full').first(); // Шукаємо саме контейнер з картками
 
-                            var addItem = function(name, icon, action, long) {
-                                var tile = $('<div class="f-tile-tv selector" tabindex="0"><div class="f-tile-tv__icon">'+icon+'</div><div class="f-tile-tv__name">'+name+'</div></div>');
-                                tile.on('hover:enter', action);
-                                if (long) tile.on('hover:long', long);
-                                body.append(tile);
-                            };
+                    if (container.length && !view.find('.f-item').length) {
+                        var folders = getFolders();
+                        
+                        // Створюємо плитку "+ Створити"
+                        var createBtn = $('<div class="f-item selector" tabindex="0"><div>+</div><div class="f-item__name">Створити</div></div>');
+                        createBtn.on('hover:enter', function() {
+                            Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                                if (name) {
+                                    var f = getFolders(); f.push({ name: name, list: [] });
+                                    saveFolders(f); Lampa.Activity.replace();
+                                }
+                            });
+                        });
+                        container.prepend(createBtn);
 
-                            addItem('Створити', '+', function() {
-                                Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
-                                    if (name) {
-                                        var f = getFolders(); f.push({ name: name, list: [] });
-                                        saveFolders(f); Lampa.Activity.replace();
+                        // Створюємо папки
+                        folders.forEach(function(f, i) {
+                            var tile = $('<div class="f-item selector" tabindex="0"><div>📁</div><div class="f-item__name">'+f.name+'</div></div>');
+                            tile.on('hover:enter', function() {
+                                Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
+                            });
+                            tile.on('hover:long', function() {
+                                Lampa.Select.show({
+                                    title: f.name,
+                                    items: [{ title: 'Видалити' }],
+                                    onSelect: function() {
+                                        var fl = getFolders(); fl.splice(i, 1);
+                                        saveFolders(fl); Lampa.Activity.replace();
                                     }
                                 });
                             });
-
-                            folders.forEach(function(f, i) {
-                                addItem(f.name, '📁', function() {
-                                    Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
-                                }, function() {
-                                    Lampa.Select.show({
-                                        title: f.name,
-                                        items: [{ title: 'Видалити папку' }],
-                                        onSelect: function() {
-                                            var fl = getFolders(); fl.splice(i, 1);
-                                            saveFolders(fl); Lampa.Activity.replace();
-                                        }
-                                    });
-                                });
-                            });
-
-                            container.prepend(row);
-                            // Оновлюємо навігацію після додавання
-                            Lampa.Controller.collectionSet(view);
-                        }
-                    }, 50);
+                            container.prepend(tile);
+                        });
+                    }
 
                     var originalStart = comp.start;
                     comp.start = function() {
                         Lampa.Controller.collectionSet(view);
                         originalStart.call(comp);
-                        
-                        // ПРИМУСОВИЙ ФОКУС ПРИ ВХОДІ
-                        var first = view.find('.f-tile-tv').first()[0];
-                        if (first) Lampa.Controller.collectionFocus(first);
                     };
 
                     return view;
@@ -146,7 +119,7 @@
         }
     });
 
-    // Меню вибору (додавання) - без змін
+    // Меню вибору (додавання) - залишаємо як було, воно працює
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
