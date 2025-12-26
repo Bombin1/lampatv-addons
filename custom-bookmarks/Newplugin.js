@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Для квадратиків у меню)
+    // 2. СТИЛІ (Плитки + вирівнювання іконок у меню)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,12 +39,9 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            /* Стилі для чекбоксів у меню */ \
-            .select-item__checkbox { width: 1.2em; height: 1.2em; border: 2px solid rgba(255,255,255,0.4); border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; } \
-            .select-item__checkbox--active { border-color: #fff; background: rgba(255,255,255,0.1); } \
-            .select-item__checkbox--active:after { content: "✓"; color: #fff; font-size: 0.9em; font-weight: bold; } \
-            .select-item.focus .select-item__checkbox { border-color: #000; } \
-            .select-item.focus .select-item__checkbox--active:after { color: #000; } \
+            /* Стиль для рядка в меню вибору */ \
+            .custom-select-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
+            .custom-select-item i { font-size: 1.4em; } \
         </style>');
     }
 
@@ -103,7 +100,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ЧИСТИЙ ПІДХІД БЕЗ ШАБЛОНІВ
+    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ З ІКОНКАМИ ТА РОБОЧОЮ ЛОГІКОЮ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -122,17 +119,17 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        
-                        // Створюємо HTML елемент вручну для 100% сумісності
-                        var checkClass = exists ? 'select-item__checkbox select-item__checkbox--active' : 'select-item__checkbox';
-                        var opacity = exists ? '1' : '0.5';
+                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
+                        var textOpacity = exists ? '1' : '0.5';
                         
                         customItems.push({ 
-                            title: f.name,
+                            // Використовуємо html для малювання як в оригіналі
+                            html: '<div class="custom-select-item" style="opacity: '+textOpacity+'"> \
+                                     <span>'+f.name+'</span> \
+                                     <i class="'+iconClass+'"></i> \
+                                   </div>',
                             is_custom: true, 
-                            f_idx: i,
-                            // Передаємо HTML розмітку прямо в назву
-                            html: '<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; opacity: '+opacity+'"><span>'+f.name+'</span><div class="'+checkClass+'"></div></div>'
+                            f_idx: i
                         });
                     });
 
@@ -143,24 +140,30 @@
                         if (item.is_custom) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
-                            var movieIdx = -1;
                             
+                            // Пошук фільму в папці
+                            var movieIdx = -1;
                             for(var j=0; j < target.list.length; j++) {
-                                if(target.list[j].id == movie.id) { movieIdx = j; break; }
+                                if(target.list[j].id == movie.id) {
+                                    movieIdx = j;
+                                    break;
+                                }
                             }
 
                             if (movieIdx > -1) {
                                 target.list.splice(movieIdx, 1);
                                 Lampa.Noty.show('Видалено з ' + target.name);
                             } else {
-                                target.list.push(JSON.parse(JSON.stringify(movie)));
+                                // Клонуємо об'єкт фільму, щоб зберегти його назавжди
+                                var movieCopy = JSON.parse(JSON.stringify(movie));
+                                target.list.push(movieCopy);
                                 Lampa.Noty.show('Додано в ' + target.name);
                             }
                             
                             saveFolders(fUpdate);
                             Lampa.Select.close();
                             
-                            // Оновлюємо та показуємо заново
+                            // Оновлюємо меню для відображення змін
                             setTimeout(function(){
                                 Lampa.Select.show(params);
                             }, 10);
@@ -174,7 +177,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ
+    // 5. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
