@@ -16,7 +16,7 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Стилі (залишаємо стабільними)
+    // Стилі (не змінюємо те, що працює)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 20px; gap: 8px; width: 100%; } \
@@ -28,7 +28,7 @@
         </style>');
     }
 
-    // 1. РОБОТА З БОКОВОЮ ПАНЕЛЛЮ (ВІДКРИТТЯ)
+    // 1. ВІДОБРАЖЕННЯ ПАПОК У РОЗДІЛІ ЗАКЛАДОК (БОКОВА ПАНЕЛЬ)
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -57,8 +57,9 @@
 
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
+                            
                             tile.on('click', function() {
-                                // ✅ Відкриваємо через items з підготовленими картками
+                                // ПРАВИЛЬНЕ ВІДКРИТТЯ (items)
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
@@ -67,6 +68,7 @@
                                     page: 1
                                 });
                             });
+
                             tile.on('hover:long', function() {
                                 Lampa.Select.show({
                                     title: folder.name,
@@ -90,18 +92,17 @@
         }
     });
 
-    // 2. ДОДАВАННЯ З КАРТКИ (НОРМАЛІЗАЦІЯ)
+    // 2. ВІДОБРАЖЕННЯ ПАПОК У КАРТЦІ ФІЛЬМУ (МЕНЮ "ВИБРАНЕ")
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
+        // Перехоплюємо будь-яке меню, де є заклади
         var isFav = params.items && params.items.some(function(i) { 
-            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
+            return i.id === 'wath' || i.id === 'book' || i.id === 'like' || i.id === 'history'; 
         });
-        var isTitle = params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1);
 
-        if (isFav || isTitle) {
+        if (isFav || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
             var folders = getFolders();
-            var active = Lampa.Activity.active();
-            var movie = active.card || active.data;
+            var movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
 
             if (folders.length > 0 && movie) {
                 params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
@@ -115,19 +116,11 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // ✅ НОРМАЛІЗАЦІЯ КАРТКИ ПЕРЕД ЗБЕРЕЖЕННЯМ
-                        var cleanCard = {
-                            id: movie.id,
-                            title: movie.title || movie.name,
-                            original_title: movie.original_title || movie.original_name,
-                            release_date: movie.release_date || movie.first_air_date,
-                            poster: movie.poster_path || movie.poster,
-                            img: movie.img || movie.poster_path || movie.poster, // Lampa часто шукає img
-                            type: movie.type || (movie.name ? 'tv' : 'movie')
-                        };
-
-                        if (!target.list.some(function(m) { return m.id == cleanCard.id; })) {
-                            target.list.push(cleanCard);
+                        // Зберігаємо повну копію об'єкта картки
+                        var cleanMovie = Object.assign({}, movie);
+                        
+                        if (!target.list.some(function(m) { return m.id == cleanMovie.id; })) {
+                            target.list.push(cleanMovie);
                             saveFolders(fUpdate);
                             Lampa.Noty.show('Додано в: ' + target.name);
                         } else {
