@@ -19,7 +19,7 @@
         }
     }
 
-    // Стилі для плиток та правильного позиціонування іконки
+    // Стилі для плиток (залишаємо без змін)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -36,10 +36,6 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            \
-            /* Стилізація іконки всередині заголовка */ \
-            .selectbox-item__title { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
-            .folder-check-icon { font-size: 1.3em; margin-left: 10px; } \
         </style>');
     }
 
@@ -61,13 +57,16 @@
                 var customItems = [];
                 folders.forEach(function(f, i) {
                     var exists = f.list.some(function(m) { return m.id == movie.id; });
-                    var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
                     
                     customItems.push({
-                        // Вставляємо іконку прямо в title. Lampa розпізнає HTML теги тут.
-                        title: '<span>' + f.name + '</span><i class="' + iconClass + ' folder-check-icon"></i>',
+                        title: f.name,
                         is_custom: true,
-                        f_idx: i
+                        f_idx: i,
+                        // Спроба використати системні атрибути для малювання іконок
+                        type: 'render',
+                        ghost: !exists,    // Малює порожній квадрат
+                        selected: exists,  // Малює квадрат з галочкою
+                        check: exists      // Запасний варіант для деяких збірок
                     });
                 });
 
@@ -98,7 +97,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // Компонент перегляду папки (залишаємо без змін)
+    // Компонент перегляду папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
