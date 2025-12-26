@@ -39,31 +39,26 @@
         </style>');
     }
 
-    // 1. ПЕРЕХОПЛЕННЯ ТА ПРАВИЛЬНИЙ РЕНДЕР
-    var originalCategoryFull = Lampa.Component.get('category_full');
-    Lampa.Component.add('category_full', function (object) {
-        if (object.is_custom_folder) {
-            // Створюємо порожній об'єкт, щоб компонент не ліз у мережу
-            object.url = ''; 
-            var comp = new originalCategoryFull(object);
+    // 1. СТВОРЮЄМО ВЛАСНИЙ КОМПОНЕНТ ДЛЯ ПЕРЕГЛЯДУ ПАПКИ
+    Lampa.Component.add('custom_folder_view', function (object) {
+        var comp = new Lampa.Component.get('category_full')(object);
+        
+        comp.create = function () {
+            // Підміняємо дані для побудови списку
+            this.build({
+                results: object.items || [],
+                total_pages: 1,
+                page: 1
+            });
             
-            // Підміняємо рендер: замість завантаження просто відмальовуємо items
-            comp.render = function () {
-                var items = object.items || [];
-                // Чекаємо мікросекунду, щоб компонент ініціалізувався
-                setTimeout(function() {
-                    comp.build({
-                        results: items,
-                        total_pages: 1,
-                        page: 1
-                    });
-                }, 10);
-                return comp.content();
-            };
-            return comp;
-        }
-        return new originalCategoryFull(object);
-    }, true);
+            return this.render();
+        };
+
+        // Перевизначаємо метод завантаження сторінок, щоб він нічого не шукав у мережі
+        comp.next = function () {};
+        
+        return comp;
+    });
 
     // 2. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
@@ -100,8 +95,7 @@
                             tile.on('click', function() {
                                 Lampa.Activity.push({
                                     title: folder.name,
-                                    component: 'category_full',
-                                    is_custom_folder: true,
+                                    component: 'custom_folder_view', // Викликаємо наш новий компонент
                                     items: folder.list || [],
                                     page: 1
                                 });
@@ -154,9 +148,7 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // Перевірка на дублікати та збереження
                         if (!target.list.some(function(m) { return m.id == movie.id; })) {
-                            // Зберігаємо тільки чистий об'єкт даних
                             var movieToSave = JSON.parse(JSON.stringify(movie));
                             target.list.push(movieToSave);
                             saveFolders(fUpdate);
