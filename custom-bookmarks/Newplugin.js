@@ -16,45 +16,27 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // СТИЛІ (ПОВНІСТЮ ПІД ОРИГІНАЛ)
+    // СТИЛІ: Колір #141616 та збільшений розмір
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 6px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background: rgba(255, 255, 255, 0.08); /* ОРИГІНАЛЬНИЙ КОЛІР КНОПОК */ \
-                width: 84px; height: 47px; \
+                background: #141616; /* ВАШ КОЛІР */ \
+                width: 98px; height: 55px; /* ЗБІЛЬШЕНО НА 1/6 */ \
                 border-radius: 6px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
-                cursor: pointer; transition: background 0.2s, transform 0.2s; \
-                border: none; \
+                cursor: pointer; transition: all 0.2s ease; \
+                border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { \
                 background: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
             } \
-            .folder-tile__name { \
-                font-size: 0.7em; \
-                font-weight: 500; \
-                text-align: center; \
-                padding: 0 4px; \
-                white-space: nowrap; \
-                text-overflow: ellipsis; \
-                overflow: hidden; \
-                width: 100%; \
-                color: inherit; \
-            } \
-            .folder-tile__count { \
-                font-size: 0.55em; \
-                opacity: 0.5; \
-                margin-top: 1px; \
-                color: inherit; \
-            } \
-            .folder-tile--create { \
-                background: rgba(255, 255, 255, 0.05); \
-                opacity: 0.8; \
-            } \
+            .folder-tile__name { font-size: 0.75em; font-weight: 500; text-align: center; padding: 0 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
+            .folder-tile__count { font-size: 0.6em; opacity: 0.5; margin-top: 2px; } \
+            .folder-tile--create { opacity: 0.9; } \
         </style>');
     }
 
