@@ -5,6 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
+    // 1. РОБОТА З ДАНИМИ ТА ХМАРОЮ
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -14,59 +15,57 @@
 
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
+        
+        // Відправка в хмару
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.set(STORAGE_KEY, folders);
+            // Примусова синхронізація
+            if (window.Lampa.Cloud.sync) window.Lampa.Cloud.sync();
         }
     }
 
-    // ОНОВЛЕНО: ЧОРНИЙ КОЛІР, 95% НЕПРОЗОРІСТЬ
+    // Спроба завантажити з хмари при першому запуску, якщо локально порожньо
+    setTimeout(function() {
+        if (getFolders().length === 0 && window.Lampa.Cloud && window.Lampa.Cloud.is()) {
+            window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
+                if (data && data.length) {
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                }
+            });
+        }
+    }, 3000);
+
+    // 2. СТИЛІ
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(0, 0, 0, 0.30) !important; \
-                width: 100px; \
-                height: 75px; \
-                border-radius: 10px; \
-                display: flex; flex-direction: column; \
-                justify-content: center; \
-                align-items: flex-start; \
-                padding: 0 10px; \
-                cursor: pointer; transition: all 0.2s ease; \
+                background-color: rgba(0, 0, 0, 0.95) !important; \
+                width: 100px; height: 75px; border-radius: 10px; \
+                display: flex; flex-direction: column; justify-content: center; align-items: flex-start; \
+                padding: 0 10px; cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
-            .folder-tile.focus { \
-                background-color: #fff !important; \
-                transform: scale(1.05); \
-            } \
-            .folder-tile__name { \
-                font-size: 1.2em; font-weight: 500; color: #fff; \
-                white-space: nowrap; text-overflow: ellipsis; overflow: hidden; \
-                width: 100%; \
-                margin-bottom: 8px; \
-            } \
+            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); outline: none; } \
+            .folder-tile__name { font-size: 1.2em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 8px; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
             .folder-tile__count { font-size: 2.1em; font-weight: 500; color: #fff; line-height: 1; } \
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
-            .folder-tile--create { \
-                background-color: rgba(0, 0, 0, 0.30) !important; \
-                border: 1px dashed rgba(255, 255, 255, 0.15); \
-                align-items: center; padding: 0; \
-            } \
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.15); align-items: center; padding: 0; } \
             .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; margin: 0; } \
         </style>');
     }
 
+    // 3. КОМПОНЕНТ ПЕРЕГЛЯДУ
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
         var html = $('<div></div>');
         var body = $('<div class="category-full"></div>');
         var last_focus;
-
         this.create = function () {
             this.activity.loader(false);
             if (object.items && object.items.length) {
@@ -75,24 +74,18 @@
                     card.create();
                     card.onFocus = function (target) { last_focus = target; scroll.update(card.render()); };
                     card.onEnter = function () {
-                        Lampa.Activity.push({
-                            url: data.url || '', component: 'full', id: data.id,
-                            method: data.name ? 'tv' : 'movie', card: data, source: data.source || 'tmdb'
-                        });
+                        Lampa.Activity.push({ url: data.url || '', component: 'full', id: data.id, method: data.name ? 'tv' : 'movie', card: data, source: data.source || 'tmdb' });
                     };
                     body.append(card.render()); items.push(card);
                 });
                 scroll.append(body); html.append(scroll.render());
             } else { html.append('<div class="empty">Тут порожньо</div>'); }
         };
-
         this.start = function () {
             Lampa.Controller.add('content', {
                 toggle: function () {
-                    if (items.length) {
-                        Lampa.Controller.collectionSet(scroll.render());
-                        Lampa.Controller.collectionFocus(last_focus || items[0].render());
-                    } else { Lampa.Controller.toggle('empty'); }
+                    if (items.length) { Lampa.Controller.collectionSet(scroll.render()); Lampa.Controller.collectionFocus(last_focus || items[0].render()); }
+                    else { Lampa.Controller.toggle('empty'); }
                 },
                 left: function () { Lampa.Controller.toggle('menu'); },
                 up: function () { Lampa.Controller.toggle('head'); },
@@ -105,33 +98,30 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
+    // 4. МЕНЮ ВИБОРУ (ЗБЕРЕЖЕННЯ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
-        var isFavMenu = params && params.items && params.items.some(function(i) { 
-            return i.id === 'wath' || i.id === 'book' || i.id === 'like'; 
-        });
+        var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
         if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
             var folders = getFolders();
             var active = Lampa.Activity.active();
             var movie = active.card || active.data;
             if (folders.length > 0 && movie) {
                 params.items = params.items.filter(function(i) { return !i.is_custom; });
-                var customItems = [];
                 folders.forEach(function(f, i) {
                     var exists = f.list.some(function(m) { return m.id == movie.id; });
-                    customItems.push({ title: f.name, selected: exists, is_custom: true, f_idx: i });
+                    params.items.unshift({ title: f.name, selected: exists, is_custom: true, f_idx: i });
                 });
-                params.items = customItems.concat(params.items);
                 var originalOnSelect = params.onSelect;
                 params.onSelect = function (item) {
                     if (item.is_custom) {
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
-                        var movieIdx = -1;
-                        for(var j=0; j < target.list.length; j++) { if(target.list[j].id == movie.id) { movieIdx = j; break; } }
+                        var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
                         if (movieIdx > -1) target.list.splice(movieIdx, 1);
                         else target.list.push(JSON.parse(JSON.stringify(movie)));
-                        saveFolders(fUpdate); Lampa.Select.close();
+                        saveFolders(fUpdate);
+                        Lampa.Select.close();
                         setTimeout(function(){ Lampa.Select.show(params); }, 10);
                     } else if (originalOnSelect) { originalOnSelect(item); }
                 };
@@ -140,37 +130,44 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
+    // 5. ІНТЕГРАЦІЯ ТА ВИПРАВЛЕННЯ ПУЛЬТА
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
                 var originalRender = comp.render;
+
                 comp.render = function () {
                     var view = originalRender.call(comp);
                     var folders = getFolders();
                     var container = view.find('.category-full, .bookmarks-list, .scroll__content').first();
+                    
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
+                        
+                        // Кнопка створити
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
-                                    var f = getFolders(); f.push({ name: name, list: [] });
-                                    saveFolders(f); Lampa.Activity.replace();
+                                    var f = getFolders();
+                                    f.push({ name: name, list: [] });
+                                    saveFolders(f);
+                                    Lampa.Activity.replace();
                                 }
                             });
                         });
                         wrapper.append(createBtn);
+
+                        // Тайли папок
                         folders.forEach(function(folder, i) {
-                            var count = folder.list ? folder.list.length : 0;
                             var tile = $('<div class="folder-tile selector">' +
                                 '<div class="folder-tile__name">' + folder.name + '</div>' +
                                 '<div class="folder-tile__count_wrap">' +
-                                    '<span class="folder-tile__count">' + count + '</span>' +
+                                    '<span class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + '</span>' +
                                     '<span class="folder-tile__total">/ 500</span>' +
-                                '</div>' +
-                            '</div>');
+                                '</div></div>');
                             tile.on('click', function() {
                                 Lampa.Activity.push({ title: folder.name, component: 'custom_folder_component', items: folder.list || [] });
                             });
@@ -186,7 +183,13 @@
                             });
                             wrapper.append(tile);
                         });
+
                         container.prepend(wrapper);
+                        
+                        // ВАЖЛИВО: Оновлюємо контролер, щоб він побачив нові елементи .selector
+                        setTimeout(function() {
+                            Lampa.Controller.toggle('content');
+                        }, 100);
                     }
                     return view;
                 };
