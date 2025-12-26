@@ -19,15 +19,15 @@
         }
     }
 
-    // ОНОВЛЕНО: ПРОЗОРІСТЬ 15%, ВИРІВНЮВАННЯ ПО ЦЕНТРУ ЗЛІВА
+    // ОНОВЛЕНО: ЧОРНИЙ КОЛІР, 10% ПРОЗОРІСТЬ, ЗБІЛЬШЕНИЙ ВІДСТУП
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(21, 24, 29, 0.15) !important; \
+                background-color: rgba(0, 0, 0, 0.1) !important; \
                 width: 100px; \
-                height: 72px; \
+                height: 75px; \
                 border-radius: 10px; \
                 display: flex; flex-direction: column; \
                 justify-content: center; \
@@ -43,7 +43,8 @@
             .folder-tile__name { \
                 font-size: 1.2em; font-weight: 500; color: #fff; \
                 white-space: nowrap; text-overflow: ellipsis; overflow: hidden; \
-                width: 100%; margin-bottom: 2px; \
+                width: 100%; \
+                margin-bottom: 8px; \
             } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
@@ -51,7 +52,7 @@
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
             .folder-tile--create { \
-                background-color: rgba(21, 24, 29, 0.15) !important; \
+                background-color: rgba(0, 0, 0, 0.1) !important; \
                 border: 1px dashed rgba(255, 255, 255, 0.15); \
                 align-items: center; padding: 0; \
             } \
