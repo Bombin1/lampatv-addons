@@ -5,6 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
+    // 1. Робота з базою даних
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -16,57 +17,50 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Стилі папок, максимально наближені до стокових папок Lampa
+    // 2. Оновлені стилі (вигляд як у стокових папок Lampa)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 10px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background: rgba(255, 255, 255, 0.1); \
-                width: 140px; height: 80px; \
-                border-radius: 8px; \
+                background: rgba(255, 255, 255, 0.07); \
+                width: 150px; height: 85px; \
+                border-radius: 10px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
                 overflow: hidden; \
+                border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { \
                 background: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
+                box-shadow: 0 10px 20px rgba(0,0,0,0.4); \
             } \
             .folder-tile__name { \
                 font-size: 0.9em; \
                 font-weight: 500; \
                 text-align: center; \
-                padding: 0 5px; \
+                padding: 0 8px; \
                 white-space: nowrap; \
                 text-overflow: ellipsis; \
                 overflow: hidden; \
                 width: 100%; \
-                z-index: 2; \
             } \
             .folder-tile__count { \
                 font-size: 0.7em; \
-                opacity: 0.6; \
+                opacity: 0.5; \
                 margin-top: 4px; \
-                z-index: 2; \
             } \
             .folder-tile--create { \
-                border: 2px dashed rgba(255, 255, 255, 0.2); \
+                border: 2px dashed rgba(255, 255, 255, 0.15); \
                 background: transparent; \
             } \
-            /* Ефект "папки" через фон, як у референсі */ \
-            .folder-tile::after { \
-                content: ""; \
-                position: absolute; \
-                bottom: 0; right: 0; \
-                width: 40px; height: 40px; \
-                background: rgba(255,255,255,0.03); \
-                border-radius: 50% 0 0 0; \
-            } \
+            .folder-tile--create.focus { border-color: #fff; } \
         </style>');
     }
 
+    // 3. Інтеграція в розділ закладок
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -82,7 +76,7 @@
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
                         
-                        // Кнопка створення
+                        // Кнопка створення нової папки
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
@@ -96,17 +90,17 @@
                         });
                         wrapper.append(createBtn);
 
-                        // Список папок
+                        // Відображення списку папок
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector"><div class="folder-tile__name">' + folder.name + '</div><div class="folder-tile__count">' + (folder.list ? folder.list.length : 0) + ' шт.</div></div>');
                             
                             tile.on('click', function() {
-                                // РЕАЛІЗАЦІЯ ЯК У РЕФЕРЕНСІ (через method: card)
+                                // ПРАВИЛЬНЕ ВІДКРИТТЯ: як у референсі my_bookmarks.js
                                 Lampa.Activity.push({
                                     title: folder.name,
                                     component: 'category_full',
-                                    method: 'card', // Вказуємо метод рендеру карток
-                                    card: folder.list || [], // Передаємо масив сюди
+                                    method: 'card',
+                                    card: folder.list || [], // Lampa очікує масив тут при методі card
                                     page: 1
                                 });
                             });
@@ -115,7 +109,7 @@
                                 Lampa.Select.show({
                                     title: folder.name,
                                     items: [
-                                        { title: 'Очистити папку', action: 'clear' },
+                                        { title: 'Очистити', action: 'clear' },
                                         { title: 'Видалити папку', action: 'delete' }
                                     ],
                                     onSelect: function(item) {
@@ -141,7 +135,7 @@
         }
     });
 
-    // Додавання в папки через меню Select (без змін, працює стабільно)
+    // 4. Додавання фільму в папки (Нормалізація даних)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -150,7 +144,8 @@
 
         if (isFavMenu || (params.title && params.title.indexOf('Вибране') !== -1)) {
             var folders = getFolders();
-            var movie = Lampa.Activity.active().card || Lampa.Activity.active().data;
+            var active = Lampa.Activity.active();
+            var movie = active.card || active.data;
 
             if (folders.length > 0 && movie) {
                 params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
@@ -164,7 +159,7 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // Нормалізація як у референсі
+                        // НОРМАЛІЗАЦІЯ КАРТКИ (важливо для відображення!)
                         var cleanCard = {
                             id: movie.id,
                             title: movie.title || movie.name,
@@ -172,6 +167,7 @@
                             release_date: movie.release_date || movie.first_air_date,
                             poster_path: movie.poster_path || movie.poster,
                             img: movie.img || movie.poster_path || movie.poster,
+                            background_image: movie.background_image || movie.backdrop_path,
                             type: movie.type || (movie.name ? 'tv' : 'movie'),
                             vote_average: movie.vote_average
                         };
