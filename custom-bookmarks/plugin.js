@@ -28,11 +28,12 @@
 
         this.create = function () {
             this.activity.loader(false);
-            if (!object.items || object.items.length === 0) {
+            var list = object.items || [];
+            if (list.length === 0) {
                 html.append('<div class="empty">Папка порожня</div>');
                 return;
             }
-            object.items.forEach(function (data) {
+            list.forEach(function (data) {
                 var card = new Lampa.Card(data, { card_category: true, is_static: true });
                 card.create();
                 card.onFocus = function () { scroll.update(card.render()); };
@@ -60,7 +61,7 @@
     }
     Lampa.Component.add('custom_folder_view', CustomFolderComponent);
 
-    // --- КОМПОНЕНТ СПИСКУ ПАПОК (Головний екран плагіна) ---
+    // --- КОМПОНЕНТ СПИСКУ ПАПОК ---
     function CustomFoldersMain(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -86,7 +87,6 @@
             body.append(createCard.render());
             items.push(createCard);
 
-            // Список папок
             folders.forEach(function(f, i) {
                 var folderCard = new Lampa.Card({name: f.name, vote: '📁'}, {is_static: true});
                 folderCard.create();
@@ -125,27 +125,37 @@
     }
     Lampa.Component.add('custom_folders_main', CustomFoldersMain);
 
-    // --- ДОДАВАННЯ В МЕНЮ ---
+    // --- БЕЗПЕЧНЕ ДОДАВАННЯ В МЕНЮ ЧЕРЕЗ КЛАС МЕНЮ ---
+    function addMenuItem() {
+        var menu = $('.menu__list');
+        if (menu.length && !menu.find('[data-action="custom_folders"]').length) {
+            var item = $('<div class="menu__item selector" data-action="custom_folders"><div class="menu__ico">📁</div><div class="menu__text">Мої папки</div></div>');
+            item.on('hover:enter', function () {
+                Lampa.Activity.push({ title: 'Мої папки', component: 'custom_folders_main' });
+            });
+            // Вставляємо після "Вибране" (bookmarks) для логічності
+            var fav = menu.find('[data-action="bookmarks"]');
+            if (fav.length) fav.after(item);
+            else menu.append(item);
+            
+            // Важливо оновити контролер меню
+            if (Lampa.Controller.enabled().name === 'menu') {
+                Lampa.Controller.collectionSet($('.menu'));
+            }
+        }
+    }
+
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
-            var menu_item = $('<div class="menu__item selector" data-action="custom_folders"> \
-                <div class="menu__ico">📁</div> \
-                <div class="menu__text">Мої папки</div> \
-            </div>');
-
-            menu_item.on('hover:enter', function () {
-                Lampa.Activity.push({
-                    title: 'Мої папки',
-                    component: 'custom_folders_main',
-                    page: 1
-                });
+            addMenuItem();
+            // Повторна перевірка при зміні активності (щоб пункт не зник)
+            Lampa.Listener.follow('activity', function (a) {
+                if (a.type === 'start') addMenuItem();
             });
-
-            $('.menu .menu__list').append(menu_item);
         }
     });
 
-    // --- МЕНЮ ДОДАВАННЯ В КАРТЦІ (залишаємо, воно працює) ---
+    // --- МЕНЮ ДОДАВАННЯ (БЕЗ ЗМІН) ---
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
