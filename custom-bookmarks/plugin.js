@@ -20,18 +20,28 @@
         }
     }
 
-    // Стилізація наших "псевдо-карток" папок
-    if (!$('#custom-folders-css').length) {
-        $('body').append('<style id="custom-folders-css"> \
-            .card--folder .card__img { background: rgba(0,0,0,0.3) !important; border: 1px dashed rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; height: 100% !important; border-radius: 8px; } \
-            .card--folder .card__title { text-align: center; padding: 5px; font-weight: bold; } \
-            .card--folder-icon { font-size: 2em; color: #fff; } \
-            .card--folder[style*="width: 100px"] { width: 100px !important; } \
-            .card--folder .card__view { height: 70px !important; } \
+    // Стилі: використовуємо відносну позицію, щоб папки штовхали контент вниз
+    if (!$('#custom-folders-styles').length) {
+        $('body').append('<style id="custom-folders-styles"> \
+            .bookmarks-custom-wrapper { position: relative; display: block; width: 100%; padding: 15px; box-sizing: border-box; z-index: 10; } \
+            .folders-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; } \
+            .folder-tile { \
+                background-color: rgba(0, 0, 0, 0.3) !important; \
+                width: 100px; height: 70px; border-radius: 8px; \
+                display: flex; flex-direction: column; justify-content: center; align-items: center; \
+                cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.1); \
+                transition: transform 0.2s; \
+            } \
+            .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); border-color: #fff; } \
+            .folder-tile__name { font-size: 0.8em; color: #fff; text-align: center; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; } \
+            .folder-tile.focus .folder-tile__name { color: #000; } \
+            .folder-tile__icon { font-size: 1.5em; margin-bottom: 2px; } \
+            /* Корекція стандартного списку Lampa, щоб він не залізав під папки */ \
+            .category-full, .bookmarks-list { position: relative !important; top: 0 !important; } \
         </style>');
     }
 
-    // Компонент перегляду папки
+    // Компонент папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -67,104 +77,69 @@
             
             Lampa.Component.add('bookmarks', function (object) {
                 var comp = new originalBookmarks(object);
-                
-                // Перехоплюємо створення карток
-                var originalBuild = comp.build;
-                comp.build = function(data) {
+                var originalRender = comp.render;
+
+                comp.render = function () {
+                    var view = originalRender.call(comp);
                     var folders = getFolders();
-                    var customItems = [];
+                    
+                    // Знаходимо контейнер прокрутки
+                    var scroll = view.find('.scroll__content');
+                    if (scroll.length) {
+                        var wrapper = $('<div class="bookmarks-custom-wrapper"><div class="folders-grid"></div></div>');
+                        var grid = wrapper.find('.folders-grid');
 
-                    // Додаємо кнопку "Створити" як першу картку
-                    customItems.push({
-                        title: 'Створити',
-                        is_folder: true,
-                        is_create: true,
-                        custom_card: true
-                    });
-
-                    // Додаємо папки як картки
-                    folders.forEach(function(f, i) {
-                        customItems.push({
-                            title: f.name + ' (' + (f.list ? f.list.length : 0) + ')',
-                            is_folder: true,
-                            folder_data: f,
-                            folder_idx: i,
-                            custom_card: true
+                        // Кнопка Створити
+                        var createBtn = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">+</div><div class="folder-tile__name">Створити</div></div>');
+                        createBtn.on('click', function() {
+                            Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                                if (name) {
+                                    var f = getFolders(); f.push({ name: name, list: [] });
+                                    saveFolders(f); Lampa.Activity.replace();
+                                }
+                            });
                         });
-                    });
+                        grid.append(createBtn);
 
-                    // Об'єднуємо наші папки зі стандартними даними Lampa
-                    if (data && data[0] && data[0].items) {
-                        data[0].items = customItems.concat(data[0].items);
-                    } else {
-                        data.unshift({items: customItems, title: 'Папки'});
+                        // Папки
+                        folders.forEach(function(f, i) {
+                            var tile = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">📁</div><div class="folder-tile__name">'+f.name+' ('+f.list.length+')</div></div>');
+                            tile.on('click', function() {
+                                Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
+                            });
+                            tile.on('hover:long', function() {
+                                Lampa.Select.show({
+                                    title: f.name,
+                                    items: [{ title: 'Видалити папку' }],
+                                    onSelect: function() {
+                                        var fList = getFolders(); fList.splice(i, 1);
+                                        saveFolders(fList); Lampa.Activity.replace();
+                                    }
+                                });
+                            });
+                            grid.append(tile);
+                        });
+
+                        // Додаємо папки НА ПОЧАТОК списку
+                        scroll.prepend(wrapper);
                     }
 
-                    return originalBuild.call(comp, data);
-                };
-
-                // Модифікуємо створення об'єкта картки, щоб вона виглядала як папка
-                var originalCard = Lampa.Card;
-                comp.render = function() {
-                    window.Lampa.Card = function(card_data, params) {
-                        if (card_data.custom_card) {
-                            params.is_static = true;
-                            var card = new originalCard(card_data, params);
-                            var originalCardCreate = card.create;
-                            
-                            card.create = function() {
-                                originalCardCreate.call(card);
-                                var render = card.render();
-                                render.addClass('card--folder').css('width', '100px');
-                                render.find('.card__img').html('<div class="card--folder-icon">' + (card_data.is_create ? '+' : '📁') + '</div>');
-                            };
-
-                            card.onEnter = function() {
-                                if (card_data.is_create) {
-                                    Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
-                                        if (name) {
-                                            var f = getFolders(); f.push({ name: name, list: [] });
-                                            saveFolders(f); Lampa.Activity.replace();
-                                        }
-                                    });
-                                } else {
-                                    Lampa.Activity.push({ title: card_data.folder_data.name, component: 'custom_folder_component', items: card_data.folder_data.list || [] });
-                                }
-                            };
-
-                            if (!card_data.is_create) {
-                                card.onHover = function() {
-                                    // Довге натискання для видалення (через меню)
-                                    $(card.render()).on('contextmenu', function(e) {
-                                        e.preventDefault();
-                                        Lampa.Select.show({
-                                            title: card_data.folder_data.name,
-                                            items: [{ title: 'Видалити папку' }],
-                                            onSelect: function() {
-                                                var f = getFolders(); f.splice(card_data.folder_idx, 1);
-                                                saveFolders(f); Lampa.Activity.replace();
-                                            }
-                                        });
-                                    });
-                                };
-                            }
-                            return card;
-                        }
-                        return new originalCard(card_data, params);
+                    // Оновлюємо навігацію після рендеру
+                    var originalStart = comp.start;
+                    comp.start = function() {
+                        originalStart.call(comp);
+                        // Змушуємо контролер побачити і наші папки, і стандартні фільми як єдине ціле
+                        Lampa.Controller.collectionSet(view);
                     };
 
-                    var view = comp.render_default ? comp.render_default() : $('<div></div>');
-                    // Повертаємо оригінальний конструктор картки після рендеру
-                    setTimeout(function() { window.Lampa.Card = originalCard; }, 0);
                     return view;
                 };
-
                 return comp;
             }, true);
         }
     });
 
-    // Меню додавання
+    // Меню додавання в папку
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
