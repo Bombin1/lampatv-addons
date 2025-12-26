@@ -16,27 +16,31 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // СТИЛІ: Колір #141616 та збільшений розмір
+    // СТИЛІ: Суцільний колір rgb(19, 22, 22) без прозорості
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background: #141616; /* ВАШ КОЛІР */ \
-                width: 98px; height: 55px; /* ЗБІЛЬШЕНО НА 1/6 */ \
-                border-radius: 6px; \
+                background-color: rgb(19, 22, 22) !important; /* ПОВНІСТЮ НЕПРОЗОРИЙ */ \
+                opacity: 1 !important; \
+                width: 118px; height: 66px; \
+                border-radius: 8px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
                 cursor: pointer; transition: all 0.2s ease; \
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { \
-                background: #fff !important; \
+                background-color: #fff !important; \
                 color: #000 !important; \
                 transform: scale(1.05); \
+                opacity: 1 !important; \
             } \
-            .folder-tile__name { font-size: 0.75em; font-weight: 500; text-align: center; padding: 0 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
-            .folder-tile__count { font-size: 0.6em; opacity: 0.5; margin-top: 2px; } \
-            .folder-tile--create { opacity: 0.9; } \
+            .folder-tile__name { font-size: 0.8em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; color: #fff; } \
+            .folder-tile.focus .folder-tile__name { color: #000; } \
+            .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
+            .folder-tile.focus .folder-tile__count { color: #000; } \
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
         </style>');
     }
 
