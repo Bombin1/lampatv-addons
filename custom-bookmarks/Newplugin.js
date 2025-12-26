@@ -16,23 +16,45 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // СТИЛІ
+    // СТИЛІ (ПОВНІСТЮ ПІД ОРИГІНАЛ)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 5px; width: 100%; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 6px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background: rgba(255, 255, 255, 0.07); \
-                width: 73px; height: 41px; \
-                border-radius: 5px; \
+                background: rgba(255, 255, 255, 0.08); /* ОРИГІНАЛЬНИЙ КОЛІР КНОПОК */ \
+                width: 84px; height: 47px; \
+                border-radius: 6px; \
                 display: flex; flex-direction: column; align-items: center; justify-content: center; \
-                cursor: pointer; transition: all 0.2s ease; \
-                border: 1px solid rgba(255, 255, 255, 0.05); \
+                cursor: pointer; transition: background 0.2s, transform 0.2s; \
+                border: none; \
             } \
-            .folder-tile.focus { background: #fff !important; color: #000 !important; transform: scale(1.05); } \
-            .folder-tile__name { font-size: 0.65em; font-weight: 500; text-align: center; padding: 0 3px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
-            .folder-tile__count { font-size: 0.5em; opacity: 0.5; margin-top: 1px; } \
-            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
+            .folder-tile.focus { \
+                background: #fff !important; \
+                color: #000 !important; \
+                transform: scale(1.05); \
+            } \
+            .folder-tile__name { \
+                font-size: 0.7em; \
+                font-weight: 500; \
+                text-align: center; \
+                padding: 0 4px; \
+                white-space: nowrap; \
+                text-overflow: ellipsis; \
+                overflow: hidden; \
+                width: 100%; \
+                color: inherit; \
+            } \
+            .folder-tile__count { \
+                font-size: 0.55em; \
+                opacity: 0.5; \
+                margin-top: 1px; \
+                color: inherit; \
+            } \
+            .folder-tile--create { \
+                background: rgba(255, 255, 255, 0.05); \
+                opacity: 0.8; \
+            } \
         </style>');
     }
 
@@ -157,7 +179,6 @@
         });
 
         if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
-            // ПЕРЕВІРКА НА ДУБЛІКАТИ
             if (!params.items.some(function(i) { return i.is_custom_header; })) {
                 var folders = getFolders();
                 var active = Lampa.Activity.active();
@@ -171,7 +192,7 @@
                             title: f.name, 
                             is_custom: true, 
                             f_idx: i,
-                            selected: exists // Використовуємо selected для стабільної галочки
+                            selected: exists 
                         });
                     });
 
@@ -189,7 +210,6 @@
                             }
                             saveFolders(fUpdate);
                             
-                            // Повне оновлення стану меню
                             item.selected = !item.selected;
                             Lampa.Select.close();
                             setTimeout(function(){
