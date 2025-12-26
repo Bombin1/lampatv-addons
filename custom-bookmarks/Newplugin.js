@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Твої оригінальні стилі для іконок)
+    // 2. СТИЛІ (З твого робочого прикладу)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,7 +39,6 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            /* Стилі для іконок у меню */ \
             .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
             .custom-folder-icon { font-size: 1.2em; opacity: 0.8; } \
         </style>');
@@ -90,7 +89,6 @@
             });
             Lampa.Controller.toggle('content');
         };
-
         this.pause = function () {}; this.stop = function () {};
         this.render = function () { return html; };
         this.destroy = function () {
@@ -100,7 +98,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ ВИБОРУ (Метод малювання з твого коду + робоча логіка)
+    // 4. МЕНЮ "ВИБРАНЕ" - ТВОЯ ВЕРСІЯ ВЕРСТКИ + МОЯ ЛОГІКА
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -108,71 +106,69 @@
         });
 
         if (isFavMenu || (params.title && (params.title.indexOf('Вибране') !== -1 || params.title.indexOf('Избранное') !== -1))) {
-            if (!params.items.some(function(i) { return i.is_custom_item; })) {
-                var folders = getFolders();
-                var active = Lampa.Activity.active();
-                var movie = active.card || active.data;
+            var folders = getFolders();
+            var active = Lampa.Activity.active();
+            var movie = active.card || active.data;
 
-                if (folders.length > 0 && movie) {
-                    var customItems = [];
+            if (folders.length > 0 && movie) {
+                // Видаляємо дублікати наших кастомних пунктів перед додаванням
+                params.items = params.items.filter(function(i) { return !i.is_custom; });
+
+                var customItems = [];
+                folders.forEach(function(f, i) {
+                    var exists = f.list.some(function(m) { return m.id == movie.id; });
+                    var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
                     
-                    folders.forEach(function(f, i) {
-                        var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
-                        var textOpacity = exists ? '1' : '0.5';
-                        
-                        customItems.push({ 
-                            // Вставляємо HTML метод малювання іконок
-                            html: '<div class="custom-folder-item" style="opacity: '+textOpacity+'"> \
-                                     <span>'+f.name+'</span> \
-                                     <i class="'+iconClass+' custom-folder-icon"></i> \
-                                   </div>',
-                            is_custom_item: true, 
-                            f_idx: i
-                        });
+                    customItems.push({ 
+                        title: f.name, // Залишаємо title про всяк випадок
+                        html: '<div class="custom-folder-item"> \
+                                 <span>'+f.name+'</span> \
+                                 <i class="'+iconClass+' custom-folder-icon"></i> \
+                               </div>',
+                        is_custom: true, 
+                        f_idx: i
                     });
+                });
 
-                    params.items = customItems.concat(params.items);
+                params.items = customItems.concat(params.items);
 
-                    var originalOnSelect = params.onSelect;
-                    params.onSelect = function (item) {
-                        if (item.is_custom_item) {
-                            var fUpdate = getFolders();
-                            var target = fUpdate[item.f_idx];
-                            
-                            // Надійний пошук та видалення/додавання
-                            var movieIdx = -1;
-                            for(var j=0; j < target.list.length; j++){
-                                if(target.list[j].id == movie.id){
-                                    movieIdx = j; break;
-                                }
-                            }
-
-                            if (movieIdx > -1) {
-                                target.list.splice(movieIdx, 1);
-                            } else {
-                                // Клонуємо об'єкт фільму для стабільності
-                                target.list.push(JSON.parse(JSON.stringify(movie)));
-                            }
-                            
-                            saveFolders(fUpdate);
-                            Lampa.Select.close();
-                            
-                            // Оновлюємо меню без сповіщень
-                            setTimeout(function(){
-                                Lampa.Select.show(params);
-                            }, 10);
-                        } else if (originalOnSelect) {
-                            originalOnSelect(item);
+                var originalOnSelect = params.onSelect;
+                params.onSelect = function (item) {
+                    if (item.is_custom) {
+                        var fUpdate = getFolders();
+                        var target = fUpdate[item.f_idx];
+                        
+                        // Пошук фільму за ID
+                        var movieIdx = -1;
+                        for(var j=0; j < target.list.length; j++) {
+                            if(target.list[j].id == movie.id) { movieIdx = j; break; }
                         }
-                    };
-                }
+
+                        if (movieIdx > -1) {
+                            target.list.splice(movieIdx, 1);
+                        } else {
+                            // Клонуємо об'єкт фільму, щоб він не зник
+                            var movieToSave = JSON.parse(JSON.stringify(movie));
+                            target.list.push(movieToSave);
+                        }
+                        
+                        saveFolders(fUpdate);
+                        Lampa.Select.close();
+                        
+                        // Перевідкриваємо меню
+                        setTimeout(function(){ 
+                            Lampa.Select.show(params); 
+                        }, 10);
+                    } else if (originalOnSelect) {
+                        originalOnSelect(item);
+                    }
+                };
             }
         }
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ
+    // 5. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
