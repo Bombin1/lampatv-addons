@@ -5,7 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // --- 1. РОБОТА З ДАНИМИ ---
+    // --- 1. РОБОТА З ДАНИМИ ТА ХМАРОЮ ---
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -34,18 +34,18 @@
                 border: 1px solid rgba(255, 255, 255, 0.05); \
             } \
             .folder-tile.focus { background-color: #fff !important; transform: scale(1.05); outline: none; border-color: #fff; } \
-            .folder-tile__name { font-size: 1.2em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 8px; } \
+            .folder-tile__name { font-size: 1.1em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 6px; } \
             .folder-tile.focus .folder-tile__name { color: #000; } \
             .folder-tile__count_wrap { display: flex; align-items: baseline; gap: 2px; } \
             .folder-tile__count { font-size: 2.1em; font-weight: 500; color: #fff; line-height: 1; } \
             .folder-tile__total { font-size: 0.75em; opacity: 0.4; color: #fff; } \
             .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); align-items: center; padding: 0; } \
-            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; margin: 0; } \
+            .folder-tile--create .folder-tile__name { text-align: center; font-size: 1em; opacity: 0.7; margin: 0; } \
         </style>');
     }
 
-    // --- 3. КОМПОНЕНТ ПАПКИ ---
+    // --- 3. КОМПОНЕНТ ПЕРЕГЛЯДУ ВМІСТУ ПАПКИ ---
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -85,7 +85,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- 4. ГОЛОВНА ЛОГІКА ТА ФІКС ПУЛЬТА ---
+    // --- 4. ГОЛОВНА ЛОГІКА ТА ВИПРАВЛЕННЯ ПОМИЛКИ (TypeError) ---
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -145,14 +145,13 @@
 
                         container.prepend(wrapper);
 
-                        // --- РЕЄСТРАЦІЯ ОКРЕМОГО КОНТРОЛЕРА ДЛЯ ПАПОК ---
+                        // РЕЄСТРАЦІЯ КОНТРОЛЕРА ДЛЯ ПАПОК
                         Lampa.Controller.add('bookmarks_folders', {
                             toggle: function () {
                                 Lampa.Controller.collectionSet(wrapper);
                                 Lampa.Controller.collectionFocus(last_folder_focus || wrapper.find('.selector').first()[0]);
                             },
                             down: function () {
-                                // При натисканні вниз переходимо до основного контенту (карток)
                                 Lampa.Controller.toggle('content');
                             },
                             up: function () {
@@ -166,20 +165,18 @@
                             }
                         });
 
-                        // Перехоплюємо стандартний контролер, щоб він знав, куди йти "Вгору"
+                        // ВИПРАВЛЕНО: Використовуємо .enabled() замість .get()
                         var originalStart = comp.start;
                         comp.start = function() {
                             originalStart.call(comp);
                             
-                            var current_controller = Lampa.Controller.enabled().name;
-                            if (Lampa.Controller.get(current_controller)) {
-                                var ctrl = Lampa.Controller.get(current_controller);
+                            var ctrl = Lampa.Controller.enabled();
+                            if (ctrl) {
                                 var old_up = ctrl.up;
-                                
                                 ctrl.up = function() {
-                                    // Якщо ми на самому верху списку карток і тиснемо вгору - йдемо до папок
+                                    // Перевіряємо чи ми на самому верху списку фільмів
                                     var focused = wrapper.find('.focus');
-                                    if (focused.length == 0) {
+                                    if (focused.length === 0) {
                                         Lampa.Controller.toggle('bookmarks_folders');
                                     } else if (old_up) {
                                         old_up.call(ctrl);
