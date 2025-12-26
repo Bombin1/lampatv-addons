@@ -16,15 +16,13 @@
     function saveFolders(folders) {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
         
-        // Відправка в хмару
         if (window.Lampa.Cloud && window.Lampa.Cloud.is() && window.Lampa.Account.logged()) {
             window.Lampa.Cloud.set(STORAGE_KEY, folders);
-            // Примусова синхронізація
             if (window.Lampa.Cloud.sync) window.Lampa.Cloud.sync();
         }
     }
 
-    // Спроба завантажити з хмари при першому запуску, якщо локально порожньо
+    // Авто-завантаження з хмари при старті
     setTimeout(function() {
         if (getFolders().length === 0 && window.Lampa.Cloud && window.Lampa.Cloud.is()) {
             window.Lampa.Cloud.get(STORAGE_KEY, function(data) {
@@ -35,13 +33,13 @@
         }
     }, 3000);
 
-    // 2. СТИЛІ
+    // 2. СТИЛІ (ПРОЗОРІСТЬ 30%)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
             .folder-tile { \
                 position: relative; \
-                background-color: rgba(0, 0, 0, 0.95) !important; \
+                background-color: rgba(0, 0, 0, 0.3) !important; \
                 width: 100px; height: 75px; border-radius: 10px; \
                 display: flex; flex-direction: column; justify-content: center; align-items: flex-start; \
                 padding: 0 10px; cursor: pointer; transition: all 0.2s ease; \
@@ -98,7 +96,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ ВИБОРУ (ЗБЕРЕЖЕННЯ)
+    // 4. МЕНЮ ВИБОРУ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
@@ -130,7 +128,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ ТА ВИПРАВЛЕННЯ ПУЛЬТА
+    // 5. ІНТЕГРАЦІЯ ТА ФІКС ПУЛЬТА
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
@@ -146,7 +144,6 @@
                     if (container.length) {
                         var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
                         
-                        // Кнопка створити
                         var createBtn = $('<div class="folder-tile folder-tile--create selector"><div class="folder-tile__name">Створити</div></div>');
                         createBtn.on('click', function () {
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
@@ -160,7 +157,6 @@
                         });
                         wrapper.append(createBtn);
 
-                        // Тайли папок
                         folders.forEach(function(folder, i) {
                             var tile = $('<div class="folder-tile selector">' +
                                 '<div class="folder-tile__name">' + folder.name + '</div>' +
@@ -186,10 +182,10 @@
 
                         container.prepend(wrapper);
                         
-                        // ВАЖЛИВО: Оновлюємо контролер, щоб він побачив нові елементи .selector
+                        // Примусово фокусуємо контролер на контенті
                         setTimeout(function() {
                             Lampa.Controller.toggle('content');
-                        }, 100);
+                        }, 200);
                     }
                     return view;
                 };
