@@ -19,7 +19,6 @@
         try {
             window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
         } catch (e) {}
-
         try {
             if (window.Lampa.Cloud && window.Lampa.Cloud.is && window.Lampa.Cloud.is() && window.Lampa.Account && window.Lampa.Account.logged && window.Lampa.Account.logged()) {
                 window.Lampa.Cloud.set(STORAGE_KEY, folders);
@@ -48,7 +47,7 @@
         var style = document.createElement('style');
         style.id = 'custom-bookmarks-styles';
         style.innerHTML = '\
-        .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
+        .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; box-sizing: border-box; } \
         .folder-tile { position: relative; background-color: rgba(0,0,0,0.3)!important; width: 100px; height: 75px; border-radius: 10px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 0 10px; cursor: pointer; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.05);} \
         .folder-tile.focus { background-color: #fff!important; transform: scale(1.05); outline: none;} \
         .folder-tile__name { font-size: 1.2em; font-weight: 500; color: #fff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; margin-bottom: 8px;} \
@@ -59,8 +58,7 @@
         .folder-tile.focus .folder-tile__count, .folder-tile.focus .folder-tile__total { color: #000;} \
         .folder-tile--create { border: 1px dashed rgba(255,255,255,0.15); align-items: center; padding: 0;} \
         .folder-tile--create .folder-tile__name { text-align: center; font-size: 1.1em; opacity: 0.7; margin: 0;} \
-        .folder-actions { position: absolute; right: 6px; top: 6px; display: flex; gap: 6px; } \
-        .folder-action { width: 18px; height: 18px; opacity: 0.7; }';
+        ';
         document.head.appendChild(style);
     }
 
@@ -200,13 +198,23 @@
                         var view = originalRender.call(comp);
                         try {
                             var folders = getFolders();
+                            // знаходимо контейнер, куди вставляються bookmarks
                             var container = view.find('.category-full, .bookmarks-list, .scroll__content').first();
 
                             if (container && container.length) {
-                                var wrapper = $('<div class="custom-bookmarks-wrapper"></div>');
+                                // створюємо wrapper і робимо його абсолютним над контентом
+                                var wrapper = $('<div class="custom-bookmarks-wrapper" aria-hidden="false"></div>');
+                                wrapper.css({
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    top: 0,
+                                    'z-index': 9999,
+                                    'box-sizing': 'border-box'
+                                });
 
                                 // Кнопка створити
-                                var createBtn = $('<div class="folder-tile folder-tile--create selector" data-name="folder" data-index="-1"><div class="folder-tile__name">Створити</div></div>');
+                                var createBtn = $('<div class="folder-tile folder-tile--create selector" data-name="folder" data-index="-1" tabindex="-1"><div class="folder-tile__name">Створити</div></div>');
                                 createBtn.on('hover:enter', function () {
                                     Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                         if (name) {
@@ -225,7 +233,7 @@
                                     var count = (folder.list && folder.list.length) ? folder.list.length : 0;
 
                                     var tile = $(
-                                        '<div class="folder-tile selector" data-name="folder" data-index="' + i + '">' +
+                                        '<div class="folder-tile selector" data-name="folder" data-index="' + i + '" tabindex="-1">' +
                                             '<div class="folder-tile__name">' + safeName + '</div>' +
                                             '<div class="folder-tile__count_wrap">' +
                                                 '<span class="folder-tile__count">' + count + '</span>' +
@@ -281,51 +289,50 @@
                                     wrapper.append(tile);
                                 });
 
-                                // Вставляємо wrapper у контейнер
+                                // Вставляємо wrapper у контейнер як перший елемент
+                                // Якщо контейнер має position: relative/absolute, wrapper абсолютно позиціюється відносно нього
                                 container.prepend(wrapper);
 
-                                // --- Патч: забезпечуємо, щоб wrapper був над скролом і скрол-контент не накривав його ---
+                                // Знаходимо реальний скрол-контент, який треба відсунути вниз
+                                var scrollContent = container.find('.scroll__content, .scroll, .category-full').first();
+
+                                function adjustBookmarksLayout() {
+                                    try {
+                                        var h = wrapper.outerHeight(true) || 0;
+                                        // якщо scrollContent є і знаходиться під wrapper, додаємо margin-top
+                                        if (scrollContent && scrollContent.length) {
+                                            // додаємо margin-top тільки якщо він менший за потрібний
+                                            var current = parseInt(scrollContent.css('margin-top') || 0, 10);
+                                            if (current < h) scrollContent.css('margin-top', h + 'px');
+                                        } else {
+                                            var curPad = parseInt(container.css('padding-top') || 0, 10);
+                                            if (curPad < h) container.css('padding-top', h + 'px');
+                                        }
+                                    } catch (e) {}
+                                }
+
+                                // Викликаємо одразу і при зміні розміру
+                                adjustBookmarksLayout();
+                                $(window).on('resize.customBookmarks', adjustBookmarksLayout);
+                                setTimeout(adjustBookmarksLayout, 50);
+
+                                // --- Реєстрація контролера для пульта ---
                                 try {
-                                    wrapper.css({
-                                        'position': 'relative',
-                                        'z-index': 3
-                                    });
-
-                                    var scrollContent = container.find('.scroll__content, .scroll, .category-full').first();
-
-                                    function adjustBookmarksLayout() {
-                                        try {
-                                            var h = wrapper.outerHeight(true) || 0;
-                                            if (scrollContent && scrollContent.length) {
-                                                scrollContent.css('margin-top', h + 'px');
-                                            } else {
-                                                container.css('padding-top', (wrapper.outerHeight(true) || 0) + 'px');
-                                            }
-                                        } catch (e) {}
-                                    }
-
-                                    adjustBookmarksLayout();
-                                    $(window).on('resize.customBookmarks', function () {
-                                        adjustBookmarksLayout();
-                                    });
-                                    setTimeout(adjustBookmarksLayout, 50);
-
-                                    // При видаленні/заміні активності можна зняти обробник:
-                                    // $(window).off('resize.customBookmarks');
-                                } catch (e) {}
-
-                                // --- Додано: реєстрація контролера для пульта ---
-                                try {
+                                    // Передаємо container як область, а елементи — масив DOM-елементів
+                                    var selectors = wrapper.find('.selector').toArray();
                                     Lampa.Controller.add('folders', {
                                         toggle: function () {
-                                            Lampa.Controller.collectionSet(wrapper, wrapper.find('.selector'));
-                                            var first = wrapper.find('.selector').eq(0);
-                                            Lampa.Controller.collectionFocus(first.length ? first : wrapper.find('.selector').eq(0), wrapper);
+                                            // collectionSet(containerElement, itemsArray)
+                                            Lampa.Controller.collectionSet(container, selectors);
+                                            // фокусуємо перший елемент
+                                            if (selectors && selectors.length) {
+                                                Lampa.Controller.collectionFocus(selectors[0], container);
+                                            }
                                         },
-                                        left: function () { Lampa.Navigator.move('left'); },
-                                        right: function () { Lampa.Navigator.move('right'); },
-                                        up: function () { Lampa.Navigator.move('up'); },
-                                        down: function () { Lampa.Navigator.move('down'); },
+                                        left: function () { try { Lampa.Navigator.move('left'); } catch (e) {} },
+                                        right: function () { try { Lampa.Navigator.move('right'); } catch (e) {} },
+                                        up: function () { try { Lampa.Navigator.move('up'); } catch (e) {} },
+                                        down: function () { try { Lampa.Navigator.move('down'); } catch (e) {} },
                                         back: function () { Lampa.Controller.toggle('content'); }
                                     });
 
@@ -335,7 +342,7 @@
                                         Lampa.Controller.toggle('folders');
                                     }
                                 } catch (e) {
-                                    // Controller або Navigator можуть бути відсутні — ігноруємо помилку
+                                    // якщо Controller або Navigator відсутні — ігноруємо
                                 }
                             }
                         } catch (e) {}
