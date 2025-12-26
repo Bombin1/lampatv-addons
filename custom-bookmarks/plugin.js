@@ -284,6 +284,36 @@
                                 // Вставляємо wrapper у контейнер
                                 container.prepend(wrapper);
 
+                                // --- Патч: забезпечуємо, щоб wrapper був над скролом і скрол-контент не накривав його ---
+                                try {
+                                    wrapper.css({
+                                        'position': 'relative',
+                                        'z-index': 3
+                                    });
+
+                                    var scrollContent = container.find('.scroll__content, .scroll, .category-full').first();
+
+                                    function adjustBookmarksLayout() {
+                                        try {
+                                            var h = wrapper.outerHeight(true) || 0;
+                                            if (scrollContent && scrollContent.length) {
+                                                scrollContent.css('margin-top', h + 'px');
+                                            } else {
+                                                container.css('padding-top', (wrapper.outerHeight(true) || 0) + 'px');
+                                            }
+                                        } catch (e) {}
+                                    }
+
+                                    adjustBookmarksLayout();
+                                    $(window).on('resize.customBookmarks', function () {
+                                        adjustBookmarksLayout();
+                                    });
+                                    setTimeout(adjustBookmarksLayout, 50);
+
+                                    // При видаленні/заміні активності можна зняти обробник:
+                                    // $(window).off('resize.customBookmarks');
+                                } catch (e) {}
+
                                 // --- Додано: реєстрація контролера для пульта ---
                                 try {
                                     Lampa.Controller.add('folders', {
