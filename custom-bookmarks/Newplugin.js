@@ -30,7 +30,7 @@
         }
     }
 
-    // 2. СТИЛІ (ВАШ ОРИГІНАЛ)
+    // 2. СТИЛІ (ВАШ ОРИГІНАЛ + ФІКС ДЛЯ ПРАВОГО КВАДРАТИКА)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -55,8 +55,8 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            .folder-item-content { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
-            .folder-item-icon { font-size: 1.2em; opacity: 0.8; margin-left: 10px; } \
+            .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
+            .custom-folder-checkbox { font-size: 1.4em; margin-left: 10px; font-weight: normal; opacity: 0.8; } \
         </style>');
     }
 
@@ -121,7 +121,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ЕМУЛЯЦІЯ КВАДРАТИКІВ (БЕЗ ПОМИЛОК)
+    // 4. МЕНЮ "ВИБРАНЕ" - ЕМУЛЯЦІЯ КВАДРАТИКІВ ЧЕРЕЗ HTML
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -140,13 +140,13 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        // Використовуємо символи квадратиків прямо в назві
-                        var icon = exists ? 'CheckBox' : 'CropSquare'; // Назви іконок Lampa
+                        // Використовуємо символи: ☑ для вибраного, ☐ для порожнього
+                        var icon = exists ? '☑' : '☐';
                         
                         customItems.push({ 
                             title: f.name,
-                            // Створюємо розмітку, щоб іконка була зправа, як в оригіналі
-                            html: '<div class="folder-item-content"><span>'+f.name+'</span><i class="folder-item-icon icon--'+icon+'"></i></div>',
+                            // Створюємо структуру з іконкою зправа
+                            html: '<div class="custom-folder-item"><span>' + f.name + '</span><span class="custom-folder-checkbox">' + icon + '</span></div>',
                             is_custom: true, 
                             f_idx: i
                         });
@@ -169,7 +169,6 @@
                             
                             saveFolders(fUpdate);
                             Lampa.Select.close();
-                            // Перевідкриваємо меню, щоб оновити стан
                             setTimeout(function(){
                                 Lampa.Select.show(params);
                             }, 10);
