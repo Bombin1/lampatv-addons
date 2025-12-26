@@ -5,7 +5,7 @@
 
     var STORAGE_KEY = 'custom_bookmarks_folders';
 
-    // 1. РОБОТА З ДАНИМИ ТА СИНХРОНІЗАЦІЯ
+    // 1. РОБОТА З ДАНИМИ
     function getFolders() {
         try {
             var data = window.localStorage.getItem(STORAGE_KEY);
@@ -30,7 +30,7 @@
         }
     }
 
-    // 2. СТИЛІ (ВАШ ОРИГІНАЛ + ФІКС ДЛЯ ПРАВОГО КВАДРАТИКА)
+    // 2. СТИЛІ (ВАШ ОРИГІНАЛ)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -55,8 +55,6 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            .custom-folder-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
-            .custom-folder-checkbox { font-size: 1.4em; margin-left: 10px; font-weight: normal; opacity: 0.8; } \
         </style>');
     }
 
@@ -121,7 +119,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ЕМУЛЯЦІЯ КВАДРАТИКІВ ЧЕРЕЗ HTML
+    // 4. МЕНЮ "ВИБРАНЕ" - ВГОРУ І З КВАДРАТИКАМИ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -140,18 +138,18 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
-                        // Використовуємо символи: ☑ для вибраного, ☐ для порожнього
-                        var icon = exists ? '☑' : '☐';
-                        
                         customItems.push({ 
-                            title: f.name,
-                            // Створюємо структуру з іконкою зправа
-                            html: '<div class="custom-folder-item"><span>' + f.name + '</span><span class="custom-folder-checkbox">' + icon + '</span></div>',
+                            title: f.name, 
                             is_custom: true, 
-                            f_idx: i
+                            f_idx: i,
+                            // ghost: true робить квадрат порожнім, якщо selected: false
+                            // selected: true малює галочку в квадраті
+                            ghost: true,
+                            selected: exists 
                         });
                     });
 
+                    // Ваші папки йдуть ПЕРШИМИ
                     params.items = customItems.concat(params.items);
 
                     var originalOnSelect = params.onSelect;
@@ -161,13 +159,12 @@
                             var target = fUpdate[item.f_idx];
                             var movieIdx = target.list.findIndex(function(m) { return m.id == movie.id; });
 
-                            if (movieIdx > -1) {
-                                target.list.splice(movieIdx, 1);
-                            } else {
-                                target.list.push(Object.assign({}, movie));
-                            }
+                            if (movieIdx > -1) target.list.splice(movieIdx, 1);
+                            else target.list.push(Object.assign({}, movie));
                             
                             saveFolders(fUpdate);
+                            
+                            // Закриваємо і відкриваємо для оновлення візуалу
                             Lampa.Select.close();
                             setTimeout(function(){
                                 Lampa.Select.show(params);
