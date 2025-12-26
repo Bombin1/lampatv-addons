@@ -16,19 +16,30 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(folders));
     }
 
-    // Стилі (дизайн папок)
+    // СТИЛІ (Розмір зменшено на 1/3)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
-            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 12px; width: 100%; } \
-            .folder-tile { position: relative; background: rgba(255, 255, 255, 0.07); width: 150px; height: 85px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.05); } \
-            .folder-tile.focus { background: #fff !important; color: #000 !important; transform: scale(1.05); } \
-            .folder-tile__name { font-size: 0.9em; font-weight: 500; text-align: center; padding: 0 8px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
-            .folder-tile__count { font-size: 0.7em; opacity: 0.5; margin-top: 4px; } \
-            .folder-tile--create { border: 2px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
+            .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 12px 15px; gap: 8px; width: 100%; } \
+            .folder-tile { \
+                position: relative; \
+                background: rgba(255, 255, 255, 0.07); \
+                width: 100px; height: 56px; \
+                border-radius: 8px; \
+                display: flex; flex-direction: column; align-items: center; justify-content: center; \
+                cursor: pointer; transition: all 0.2s ease; \
+                border: 1px solid rgba(255, 255, 255, 0.05); \
+            } \
+            .folder-tile.focus { \
+                background: #fff !important; color: #000 !important; \
+                transform: scale(1.05); \
+            } \
+            .folder-tile__name { font-size: 0.75em; font-weight: 500; text-align: center; padding: 0 5px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; } \
+            .folder-tile__count { font-size: 0.6em; opacity: 0.5; margin-top: 2px; } \
+            .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.15); background: transparent; } \
         </style>');
     }
 
-    // 1. КОМПОНЕНТ РЕНДЕРУ (ВИПРАВЛЕНО)
+    // 1. КОМПОНЕНТ РЕНДЕРУ
     Lampa.Component.add('custom_folder_component', function (object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -42,7 +53,6 @@
 
             if (object.items && object.items.length) {
                 object.items.forEach(function (data) {
-                    // Важливо: передаємо дані через Object.assign для сумісності
                     var card = new Lampa.Card(data, {
                         card_category: true,
                         is_static: true
@@ -77,7 +87,6 @@
             }
         };
 
-        // Метод START виправляє помилку "this.component.start is not a function"
         this.start = function () {
             Lampa.Controller.add('content', {
                 toggle: function () {
@@ -167,7 +176,7 @@
         }
     });
 
-    // 3. ДОДАВАННЯ (ВИПРАВЛЕНО ДЛЯ КАРТИНОК)
+    // 3. ДОДАВАННЯ (БЕЗ ПОВІДОМЛЕНЬ ТА ЕМОДЗІ)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { 
@@ -180,9 +189,9 @@
             var movie = active.card || active.data;
 
             if (folders.length > 0 && movie) {
-                params.items.push({ title: '--- МОЇ ПАПКИ ---', separator: true });
+                params.items.push({ title: 'ПАПКИ', separator: true });
                 folders.forEach(function(f, i) {
-                    params.items.push({ title: '📁 ' + f.name, is_custom: true, f_idx: i });
+                    params.items.push({ title: f.name, is_custom: true, f_idx: i }); // Емодзі прибрано
                 });
 
                 var originalOnSelect = params.onSelect;
@@ -191,15 +200,12 @@
                         var fUpdate = getFolders();
                         var target = fUpdate[item.f_idx];
                         
-                        // ПРАВИЛЬНЕ ЗБЕРЕЖЕННЯ (копіюємо все для TMDB)
                         var movieToSave = Object.assign({}, movie);
                         
                         if (!target.list.some(function(m) { return m.id == movieToSave.id; })) {
                             target.list.push(movieToSave);
                             saveFolders(fUpdate);
-                            Lampa.Noty.show('Додано в: ' + target.name);
-                        } else {
-                            Lampa.Noty.show('Вже є в цій папці');
+                            // Повідомлення Noty видалено
                         }
                     } else if (originalOnSelect) {
                         originalOnSelect(item);
