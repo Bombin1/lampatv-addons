@@ -20,7 +20,7 @@
         }
     }
 
-    // 2. СТИЛІ (Плитки + вирівнювання іконок у меню)
+    // 2. СТИЛІ (Плитки + фікс відображення іконок)
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -39,9 +39,11 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
-            /* Стиль для рядка в меню вибору */ \
-            .custom-select-item { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
-            .custom-select-item i { font-size: 1.4em; } \
+            /* Фікс для відображення в меню */ \
+            .custom-item-render { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 2em; color: #fff; } \
+            .custom-item-render span { font-size: 1.2em; } \
+            .custom-item-render i { font-size: 1.4em; color: #fff; } \
+            .focus .custom-item-render, .focus .custom-item-render i, .focus .custom-item-render span { color: #000 !important; } \
         </style>');
     }
 
@@ -100,7 +102,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - РЕАЛІЗАЦІЯ З ІКОНКАМИ ТА РОБОЧОЮ ЛОГІКОЮ
+    // 4. МЕНЮ "ВИБРАНЕ" - ВИПРАВЛЕНО ВІДОБРАЖЕННЯ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -120,14 +122,12 @@
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
                         var iconClass = exists ? 'icon--CheckBox' : 'icon--CropSquare';
-                        var textOpacity = exists ? '1' : '0.5';
+                        var opacity = exists ? '1' : '0.4';
                         
                         customItems.push({ 
-                            // Використовуємо html для малювання як в оригіналі
-                            html: '<div class="custom-select-item" style="opacity: '+textOpacity+'"> \
-                                     <span>'+f.name+'</span> \
-                                     <i class="'+iconClass+'"></i> \
-                                   </div>',
+                            // Використовуємо контейнер з явним кольором та розміром
+                            title: f.name,
+                            html: '<div class="custom-item-render" style="opacity: '+opacity+'"><span>'+f.name+'</span><i class="'+iconClass+'"></i></div>',
                             is_custom: true, 
                             f_idx: i
                         });
@@ -140,30 +140,22 @@
                         if (item.is_custom) {
                             var fUpdate = getFolders();
                             var target = fUpdate[item.f_idx];
-                            
-                            // Пошук фільму в папці
                             var movieIdx = -1;
                             for(var j=0; j < target.list.length; j++) {
-                                if(target.list[j].id == movie.id) {
-                                    movieIdx = j;
-                                    break;
-                                }
+                                if(target.list[j].id == movie.id) { movieIdx = j; break; }
                             }
 
                             if (movieIdx > -1) {
                                 target.list.splice(movieIdx, 1);
                                 Lampa.Noty.show('Видалено з ' + target.name);
                             } else {
-                                // Клонуємо об'єкт фільму, щоб зберегти його назавжди
-                                var movieCopy = JSON.parse(JSON.stringify(movie));
-                                target.list.push(movieCopy);
+                                target.list.push(JSON.parse(JSON.stringify(movie)));
                                 Lampa.Noty.show('Додано в ' + target.name);
                             }
                             
                             saveFolders(fUpdate);
                             Lampa.Select.close();
                             
-                            // Оновлюємо меню для відображення змін
                             setTimeout(function(){
                                 Lampa.Select.show(params);
                             }, 10);
@@ -177,7 +169,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ В ЗАКЛАДКИ
+    // 5. ІНТЕГРАЦІЯ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             var originalBookmarks = Lampa.Component.get('bookmarks');
