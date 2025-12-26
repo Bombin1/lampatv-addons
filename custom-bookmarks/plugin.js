@@ -19,7 +19,7 @@
         }
     }
 
-    // --- Компонент вмісту папки ---
+    // --- Компонент перегляду вмісту папки ---
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -56,68 +56,77 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // --- Вставка папок у "Вибране" ---
-    Lampa.Listener.follow('activity', function (e) {
-        if (e.type === 'start' && e.component === 'bookmarks') {
-            var view = e.object.render();
+    // --- ПЕРЕХОПЛЕННЯ СТАНДАРТНОГО КОМПОНЕНТА ---
+    var originalBookmarks = Lampa.Component.get('bookmarks');
+    
+    Lampa.Component.add('bookmarks', function (object) {
+        var comp = new originalBookmarks(object);
+        var originalBuild = comp.build;
+
+        // Переписуємо метод побудови списку
+        comp.build = function (data) {
+            // Викликаємо оригінальну побудову (фільми, історія тощо)
+            originalBuild.apply(comp, arguments);
+
+            var view = comp.render();
+            var scroll = view.find('.scroll__content');
             
-            // Видаляємо дублікати, якщо вони є
-            view.find('.custom-folders-wrap').remove();
+            if (scroll.length && !scroll.find('.custom-folders-block').length) {
+                var folders = getFolders();
+                var wrap = $('<div class="custom-folders-block" style="width: 100%; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);"> \
+                    <div class="category__title" style="margin-left: 20px; padding-top: 10px;">Мої папки</div> \
+                    <div class="category-full custom-cards-line" style="display: flex; flex-wrap: wrap; padding: 0 15px;"></div> \
+                </div>');
+                
+                var container = wrap.find('.custom-cards-line');
 
-            var folders = getFolders();
-            var wrap = $('<div class="custom-folders-wrap" style="width: 100%; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"> \
-                <div class="category__title" style="margin-left: 20px;">Мої папки</div> \
-                <div class="category-full" style="display: flex; flex-wrap: wrap; padding: 0 15px;"></div> \
-            </div>');
-            
-            var container = wrap.find('.category-full');
-
-            // Кнопка "+"
-            var addBtn = new Lampa.Card({name: 'Створити', vote: '+'}, {is_static: true});
-            addBtn.create();
-            addBtn.render().css({width: '120px', height: '80px', margin: '5px'});
-            addBtn.onEnter = function() {
-                Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
-                    if (name) {
-                        var f = getFolders(); f.push({ name: name, list: [] });
-                        saveFolders(f); Lampa.Activity.replace();
-                    }
-                });
-            };
-            container.append(addBtn.render());
-
-            // Список папок
-            folders.forEach(function(f, i) {
-                var card = new Lampa.Card({name: f.name, vote: '📁'}, {is_static: true});
-                card.create();
-                card.render().css({width: '120px', height: '80px', margin: '5px'});
-                card.onEnter = function() {
-                    Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
-                };
-                card.onLong = function() {
-                    Lampa.Select.show({
-                        title: f.name,
-                        items: [{title: 'Видалити'}],
-                        onSelect: function() {
-                            var fl = getFolders(); fl.splice(i, 1);
-                            saveFolders(fl); Lampa.Activity.replace();
+                // Плитка "Створити"
+                var createBtn = new Lampa.Card({name: 'Створити', vote: '+'}, {is_static: true});
+                createBtn.create();
+                createBtn.render().css({width: '120px', height: '80px', margin: '5px'});
+                createBtn.onEnter = function() {
+                    Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
+                        if (name) {
+                            var f = getFolders(); f.push({ name: name, list: [] });
+                            saveFolders(f); Lampa.Activity.replace();
                         }
                     });
                 };
-                container.append(card.render());
-            });
+                container.append(createBtn.render());
 
-            // Вставляємо на початок
-            view.find('.scroll__content').prepend(wrap);
-            
-            // ПРАВИЛЬНА НАВІГАЦІЯ: оновлюємо контролер після вставки
-            setTimeout(function() {
+                // Плитки папок
+                folders.forEach(function(f, i) {
+                    var folderCard = new Lampa.Card({name: f.name, vote: '📁'}, {is_static: true});
+                    folderCard.create();
+                    folderCard.render().css({width: '120px', height: '80px', margin: '5px'});
+                    folderCard.onEnter = function() {
+                        Lampa.Activity.push({ title: f.name, component: 'custom_folder_component', items: f.list });
+                    };
+                    folderCard.onLong = function() {
+                        Lampa.Select.show({
+                            title: f.name,
+                            items: [{title: 'Видалити папку'}],
+                            onSelect: function() {
+                                var fl = getFolders(); fl.splice(i, 1);
+                                saveFolders(fl); Lampa.Activity.replace();
+                            }
+                        });
+                    };
+                    container.append(folderCard.render());
+                });
+
+                // Вставляємо блок ПЕРЕД першим списком фільмів
+                scroll.prepend(wrap);
+                
+                // Оновлюємо карту навігації, щоб пульт бачив нові картки
                 Lampa.Controller.collectionSet(view);
-            }, 200);
-        }
-    });
+            }
+        };
 
-    // --- Меню в картці фільму ---
+        return comp;
+    }, true);
+
+    // --- Меню додавання в картці фільму (працює стабільно) ---
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFav = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
