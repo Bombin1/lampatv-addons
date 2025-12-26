@@ -19,11 +19,11 @@
         }
     }
 
-    // СТИЛІ
+    // Стилі (100px ширина, 30% прозорість при фокусі)
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .folders-row { width: 100%; padding: 10px 0; margin-bottom: 15px; position: relative; display: block; } \
-            .folders-row__body { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
+            .folders-container { width: 100%; padding: 10px 0; margin-bottom: 20px; display: block; clear: both; } \
+            .folders-container__body { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
             .folder-tile { \
                 width: 100px; height: 65px; \
                 background-color: rgba(255, 255, 255, 0.05) !important; \
@@ -33,14 +33,15 @@
             } \
             .folder-tile.focus { \
                 background-color: rgba(255, 255, 255, 0.3) !important; \
-                border-color: #fff; transform: scale(1.05); z-index: 10; \
+                border-color: #fff; transform: scale(1.05); z-index: 100; \
             } \
             .folder-tile__name { font-size: 11px; color: #fff; text-align: center; margin-top: 3px; overflow: hidden; white-space: nowrap; width: 90%; } \
             .folder-tile__icon { font-size: 16px; } \
+            .category-full { position: relative !important; top: 0 !important; } \
         </style>');
     }
 
-    // Компонент перегляду папки
+    // Компонент перегляду вмісту папки
     function CustomFolderComponent(object) {
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = [];
@@ -81,15 +82,15 @@
                 comp.render = function () {
                     var view = originalRender.call(comp);
                     
-                    // ПЕРЕВІРКА: щоб не додавати папки кілька разів (у кожну категорію)
-                    if (view.find('.folders-row').length) return view;
+                    // ФІКС: Якщо папки вже додані на цю сторінку, не додаємо їх знову
+                    if (window.bookmarks_folders_added) return view;
 
                     var folders = getFolders();
                     var scrollContent = view.find('.scroll__content');
 
                     if (scrollContent.length) {
-                        var row = $('<div class="folders-row"><div class="folders-row__body"></div></div>');
-                        var body = row.find('.folders-row__body');
+                        var container = $('<div class="folders-container"><div class="folders-container__body"></div></div>');
+                        var body = container.find('.folders-container__body');
 
                         var addTile = function(title, icon, action, longAction) {
                             var tile = $('<div class="folder-tile selector" tabindex="0"><div class="folder-tile__icon">'+icon+'</div><div class="folder-tile__name">'+title+'</div></div>');
@@ -102,7 +103,7 @@
                             Lampa.Input.edit({ value: '', title: 'Назва папки' }, function (name) {
                                 if (name) {
                                     var f = getFolders(); f.push({ name: name, list: [] });
-                                    saveFolders(f); Lampa.Activity.replace();
+                                    saveFolders(f); window.bookmarks_folders_added = false; Lampa.Activity.replace();
                                 }
                             });
                         });
@@ -116,29 +117,33 @@
                                     items: [{ title: 'Видалити папку' }],
                                     onSelect: function() {
                                         var fList = getFolders(); fList.splice(i, 1);
-                                        saveFolders(fList); Lampa.Activity.replace();
+                                        saveFolders(fList); window.bookmarks_folders_added = false; Lampa.Activity.replace();
                                     }
                                 });
                             });
                         });
 
-                        scrollContent.prepend(row);
+                        scrollContent.prepend(container);
+                        window.bookmarks_folders_added = true; // Помічаємо, що папки додані
                     }
 
-                    // НАВІГАЦІЯ БЕЗ ПОМИЛОК
                     var originalStart = comp.start;
                     comp.start = function() {
-                        // Реєструємо всі елементи (включаючи наші папки)
+                        // Реєструємо всі елементи для навігації
                         Lampa.Controller.collectionSet(view);
-                        
                         // Запускаємо стандартний контролер
                         originalStart.call(comp);
                         
-                        // Примусово фокусуємось на папках, якщо ми тільки зайшли
-                        if (!view.find('.selector.focus').length) {
-                            var firstFolder = view.find('.folder-tile').first()[0];
-                            if (firstFolder) Lampa.Controller.collectionFocus(firstFolder);
-                        }
+                        // Якщо ми тільки зайшли, ставимо фокус на першу папку
+                        var first = view.find('.folder-tile').first()[0];
+                        if (first) Lampa.Controller.collectionFocus(first);
+                    };
+
+                    // При закритті закладок скидаємо прапорець
+                    var originalDestroy = comp.destroy;
+                    comp.destroy = function() {
+                        window.bookmarks_folders_added = false;
+                        if (originalDestroy) originalDestroy.call(comp);
                     };
 
                     return view;
