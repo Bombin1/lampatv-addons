@@ -30,7 +30,7 @@
         }
     }
 
-    // 2. СТИЛІ (Ваш оригінал: 118x66, rgb(19, 22, 22))
+    // 2. СТИЛІ (118x66, rgb(19, 22, 22))
     if (!$('#custom-bookmarks-styles').length) {
         $('body').append('<style id="custom-bookmarks-styles"> \
             .custom-bookmarks-wrapper { display: flex; flex-wrap: wrap; padding: 10px 15px; gap: 8px; width: 100%; } \
@@ -119,7 +119,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ОРИГІНАЛЬНІ ГАЛОЧКИ ТА ПЕРЕМІЩЕННЯ ВГОРУ
+    // 4. МЕНЮ "ВИБРАНЕ" - ЧЕКБОКСИ ЯК В ОРИГІНАЛІ
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -142,8 +142,8 @@
                             title: f.name, 
                             is_custom: true, 
                             f_idx: i,
-                            ghost: !exists, // Якщо не додано - порожній квадрат
-                            selected: exists // Якщо додано - квадрат з галочкою
+                            checkbox: true, // ВИКОРИСТОВУЄМО СИСТЕМНИЙ ЧЕКБОКС (КВАДРАТ)
+                            selected: exists 
                         });
                     });
 
@@ -161,10 +161,6 @@
                             
                             saveFolders(fUpdate);
                             
-                            // Оновлюємо стан для візуальної синхронності перед перевідкриттям
-                            item.selected = !item.selected;
-                            item.ghost = !item.selected;
-                            
                             Lampa.Select.close();
                             setTimeout(function(){ Lampa.Select.show(params); }, 10);
                         } else if (originalOnSelect) {
@@ -177,7 +173,7 @@
         originalSelectShow.call(Lampa.Select, params);
     };
 
-    // 5. ІНТЕГРАЦІЯ В РОЗДІЛ ЗАКЛАДОК
+    // 5. ІНТЕГРАЦІЯ
     Lampa.Listener.follow('app', function (e) {
         if (e.type === 'ready') {
             loadFromCloud();
