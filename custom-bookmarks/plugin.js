@@ -19,25 +19,24 @@
         }
     }
 
-    // Стилі: 100px, 30% прозорість
+    // СТИЛІ
     if (!$('#custom-folders-styles').length) {
         $('body').append('<style id="custom-folders-styles"> \
-            .folders-row { width: 100%; margin-bottom: 20px; position: relative; } \
-            .folders-row__title { padding: 10px 20px; font-size: 1.2em; color: rgba(255,255,255,0.5); font-weight: bold; } \
+            .folders-row { width: 100%; padding: 10px 0; margin-bottom: 15px; position: relative; display: block; } \
             .folders-row__body { display: flex; flex-wrap: wrap; padding: 0 15px; gap: 10px; } \
             .folder-tile { \
-                width: 100px; height: 60px; \
+                width: 100px; height: 65px; \
                 background-color: rgba(255, 255, 255, 0.05) !important; \
                 border-radius: 8px; border: 2px solid transparent; \
                 display: flex; flex-direction: column; justify-content: center; align-items: center; \
-                cursor: pointer; box-sizing: border-box; transition: 0.2s; \
+                cursor: pointer; box-sizing: border-box; \
             } \
             .folder-tile.focus { \
                 background-color: rgba(255, 255, 255, 0.3) !important; \
-                border-color: #fff; transform: scale(1.05); \
+                border-color: #fff; transform: scale(1.05); z-index: 10; \
             } \
-            .folder-tile__name { font-size: 11px; color: #fff; text-align: center; overflow: hidden; white-space: nowrap; width: 90%; } \
-            .folder-tile__icon { font-size: 16px; margin-bottom: 2px; } \
+            .folder-tile__name { font-size: 11px; color: #fff; text-align: center; margin-top: 3px; overflow: hidden; white-space: nowrap; width: 90%; } \
+            .folder-tile__icon { font-size: 16px; } \
         </style>');
     }
 
@@ -81,11 +80,15 @@
 
                 comp.render = function () {
                     var view = originalRender.call(comp);
+                    
+                    // ПЕРЕВІРКА: щоб не додавати папки кілька разів (у кожну категорію)
+                    if (view.find('.folders-row').length) return view;
+
                     var folders = getFolders();
                     var scrollContent = view.find('.scroll__content');
 
                     if (scrollContent.length) {
-                        var row = $('<div class="folders-row"><div class="folders-row__title">Мої папки</div><div class="folders-row__body"></div></div>');
+                        var row = $('<div class="folders-row"><div class="folders-row__body"></div></div>');
                         var body = row.find('.folders-row__body');
 
                         var addTile = function(title, icon, action, longAction) {
@@ -119,36 +122,22 @@
                             });
                         });
 
-                        // Вставляємо на самий початок скролу
                         scrollContent.prepend(row);
                     }
 
-                    // ТЕХНІКА REZKA: Перехоплюємо активацію контролера
+                    // НАВІГАЦІЯ БЕЗ ПОМИЛОК
                     var originalStart = comp.start;
                     comp.start = function() {
-                        // Реєструємо всі елементи в Lampa
+                        // Реєструємо всі елементи (включаючи наші папки)
                         Lampa.Controller.collectionSet(view);
                         
-                        // Запускаємо стандартну логіку
+                        // Запускаємо стандартний контролер
                         originalStart.call(comp);
-
-                        // Якщо Lampa активувала свій контролер, ми втручаємось у його роботу
-                        var current = Lampa.Controller.enabled().name;
-                        var ctrl = Lampa.Controller.get(current);
-
-                        if (ctrl) {
-                            var oldUp = ctrl.up;
-                            ctrl.up = function() {
-                                var focused = view.find('.selector.focus');
-                                // Якщо ми на фільмах, і тиснемо вгору - перевіряємо чи є папки вище
-                                if (!focused.hasClass('folder-tile')) {
-                                    var firstFolder = view.find('.folder-tile').first();
-                                    if (firstFolder.length && focused.offset().top < (firstFolder.offset().top + 200)) {
-                                        return Lampa.Controller.collectionFocus(firstFolder[0]);
-                                    }
-                                }
-                                if (oldUp) oldUp();
-                            };
+                        
+                        // Примусово фокусуємось на папках, якщо ми тільки зайшли
+                        if (!view.find('.selector.focus').length) {
+                            var firstFolder = view.find('.folder-tile').first()[0];
+                            if (firstFolder) Lampa.Controller.collectionFocus(firstFolder);
                         }
                     };
 
@@ -159,7 +148,7 @@
         }
     });
 
-    // Меню вибору (додавання в папки) залишається без змін
+    // Меню вибору (додавання)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { return i.id === 'wath' || i.id === 'book' || i.id === 'like'; });
