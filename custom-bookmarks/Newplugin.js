@@ -55,6 +55,8 @@
             .folder-tile__count { font-size: 0.65em; opacity: 0.6; margin-top: 3px; color: #fff; } \
             .folder-tile.focus .folder-tile__count { color: #000; } \
             .folder-tile--create { border: 1px dashed rgba(255, 255, 255, 0.2); } \
+            .folder-item-content { display: flex; justify-content: space-between; align-items: center; width: 100%; } \
+            .folder-item-icon { font-size: 1.2em; opacity: 0.8; margin-left: 10px; } \
         </style>');
     }
 
@@ -119,7 +121,7 @@
     }
     Lampa.Component.add('custom_folder_component', CustomFolderComponent);
 
-    // 4. МЕНЮ "ВИБРАНЕ" - ТЕПЕР З КВАДРАТИКАМИ
+    // 4. МЕНЮ "ВИБРАНЕ" - ЕМУЛЯЦІЯ КВАДРАТИКІВ (БЕЗ ПОМИЛОК)
     var originalSelectShow = Lampa.Select.show;
     Lampa.Select.show = function (params) {
         var isFavMenu = params && params.items && params.items.some(function(i) { 
@@ -138,13 +140,15 @@
                     
                     folders.forEach(function(f, i) {
                         var exists = f.list.some(function(m) { return m.id == movie.id; });
+                        // Використовуємо символи квадратиків прямо в назві
+                        var icon = exists ? 'CheckBox' : 'CropSquare'; // Назви іконок Lampa
+                        
                         customItems.push({ 
-                            title: f.name, 
+                            title: f.name,
+                            // Створюємо розмітку, щоб іконка була зправа, як в оригіналі
+                            html: '<div class="folder-item-content"><span>'+f.name+'</span><i class="folder-item-icon icon--'+icon+'"></i></div>',
                             is_custom: true, 
-                            f_idx: i,
-                            template: 'is_checked', // ВИКОРИСТОВУЄМО ШАБЛОН ЧЕКБОКСА
-                            ghost: !exists,         // Порожній квадрат, якщо не вибрано
-                            selected: exists        // Квадрат з галочкою, якщо вибрано
+                            f_idx: i
                         });
                     });
 
@@ -159,17 +163,13 @@
 
                             if (movieIdx > -1) {
                                 target.list.splice(movieIdx, 1);
-                                item.selected = false;
-                                item.ghost = true;
                             } else {
                                 target.list.push(Object.assign({}, movie));
-                                item.selected = true;
-                                item.ghost = false;
                             }
                             
                             saveFolders(fUpdate);
-                            
                             Lampa.Select.close();
+                            // Перевідкриваємо меню, щоб оновити стан
                             setTimeout(function(){
                                 Lampa.Select.show(params);
                             }, 10);
